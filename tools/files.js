@@ -1,0 +1,29 @@
+// Orden de carga de los scripts del juego (lo usan el build y los tests).
+module.exports = {
+  game: [
+    'src/game/core.js',
+    'src/data/countries.js',
+    'src/data/names.js',
+    'src/data/teams_arg.js',
+    'src/data/teams_bra.js',
+    'src/data/teams_rest.js',
+    'src/game/players.js',
+    'src/game/economy.js',
+    'src/game/ai.js',
+    'src/game/world.js',
+    'src/game/match.js',
+    'src/game/board.js',
+    'src/game/market.js',
+    'src/game/season.js',
+    'src/game/end.js',
+    'src/game/actions.js',
+    'src/game/save.js',
+  ],
+  ui: [
+    'src/ui/ui.js',
+    'src/ui/screens.js',
+    'src/ui/screens2.js',
+    'src/ui/match_ui.js',
+    'src/ui/main.js',
+  ],
+};
