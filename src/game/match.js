@@ -19,7 +19,7 @@ DT.Match = (function () {
       tac = { f: team.tac.f, m: DT.AI.mentalityVs(team, oppTeam, home), p: team.tac.p };
     }
     const F = DT.FORMATIONS[tac.f];
-    const on = xi.map((pid, i) => ({ id: pid, slot: F.l[i] })).filter((x) => x.id);
+    const on = xi.map((pid, i) => ({ id: pid, slot: F.l[i], i })).filter((x) => x.id);
     return {
       tid: team.id,
       user: isUser,
@@ -49,6 +49,18 @@ DT.Match = (function () {
     return { att: Math.round(st.att / 4), mid: Math.round(st.mid / 5.5), def: Math.round(st.def / 5.6), gk: Math.round(st.gk) };
   };
 
+  // Clima del partido (decorativo) según país y época del año.
+  M.weather = function (home) {
+    const w = DT.G ? DT.G.week : 10;
+    const cold = { ARG: 1, URU: 1, CHI: 1, BRA: 0, PAR: 0, BOL: 1, PER: 0, ECU: 0, COL: 0, VEN: 0 }[home.cc];
+    // semanas 14-30 ≈ otoño/invierno austral
+    const winter = cold && w >= 14 && w <= 30;
+    const base = home.cc === 'BOL' ? 8 : winter ? 6 : cold ? 17 : 22;
+    const min = base + U.ri(-3, 3), max = min + U.ri(5, 9);
+    const sky = U.weighted(['Despejado', 'Nublado', 'Parcialmente nublado', 'Lluvia', 'Llovizna'], [5, 2, 3, 1.2, 1]);
+    return { sky, min, max };
+  };
+
   M.create = function (match, opts) {
     const G = DT.G;
     const h = G.teams[match.h], a = G.teams[match.a];
@@ -64,6 +76,8 @@ DT.Match = (function () {
       neutral: !!match.neutral,
       s: [sideSetup(h, hu, a, true), sideSetup(a, au, h, false)],
       verbose: hu || au || (opts && opts.verbose),
+      weather: M.weather(h),
+      derby: DT.isDerby(h.id, a.id),
     };
     for (const side of sim.s) for (const x of side.on) side.rating[x.id] = 6.2;
     return sim;
@@ -143,6 +157,7 @@ DT.Match = (function () {
     const G = DT.G;
     if (sim.done) return;
     sim.min++;
+    sim.last = null;
     const limit1 = 45 + sim.added1, limit2 = 90 + sim.added2;
     if (sim.half === 1 && sim.min > limit1) {
       sim.half = 2;
@@ -173,6 +188,8 @@ DT.Match = (function () {
     const def = 1 - att;
     sim.s[att].poss++;
     const r = st[att].att / Math.max(1, st[def].def) / 0.78;
+    // lo que pasó en el minuto, para la cancha animada
+    sim.last = { att, r, shot: null, cards: [] };
     const c = 0.24 * Math.pow(U.clamp(r, 0.25, 3), 1.5);
     if (U.chance(c)) {
       const shooterId = pickWeighted(sim, att, { A: 5, M: 2, D: 0.45, P: 0 });
@@ -184,9 +201,11 @@ DT.Match = (function () {
         sim.s[att].shots++;
         const onTarget = U.chance(0.35 + q);
         if (onTarget) sim.s[att].sot++;
+        sim.last.shot = { pid: shooterId, on: onTarget, goal: false };
         if (onTarget && U.chance((q * 1.1) / (0.35 + q))) {
           // gol
           sim.s[att].goals++;
+          sim.last.shot.goal = true;
           const asId = U.chance(0.75) ? pickWeighted(sim, att, { M: 3, A: 2, D: 1, P: 0.05 }, shooterId) : null;
           const as = asId ? G.players[asId] : null;
           sim.s[att].rating[shooterId] = (sim.s[att].rating[shooterId] || 6) + 1.1;
@@ -230,6 +249,7 @@ DT.Match = (function () {
 
   M.card = function (sim, i, pid, straightRed) {
     const G = DT.G;
+    if (sim.last) sim.last.cards.push({ side: i, pid, red: !!straightRed });
     const side = sim.s[i];
     const p = G.players[pid];
     side.cards = side.cards || {};

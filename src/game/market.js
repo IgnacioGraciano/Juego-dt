@@ -63,7 +63,7 @@ DT.M = (function () {
       if (!G.willing[pid]) return { res: 'reject', msg: `${p.n} no quiere jugar en ${me.n}.` };
     }
     const payroll = DT.E.payroll(me) - (p.t === me.id ? p.w : 0);
-    if (payroll + wage > DT.E.wageCap(me) * 1.05) return { res: 'board', msg: `La directiva no aprueba: la masa salarial superaría el tope de ${U.money(DT.E.wageCap(me))} anuales.` };
+    if (payroll + wage > DT.E.wageCap(me)) return { res: 'board', msg: `La masa salarial quedaría en ${U.money(payroll + wage)} y el tope es ${U.money(DT.E.wageCap(me))}. Liberá sueldos (vendé, cedé o rescindí) o pedile a la directiva que amplíe el tope.` };
     const r = wage / d.w;
     if (r >= 1 || (r >= 0.92 && U.chance(0.6))) return { res: 'accept', wage, years };
     return { res: 'counter', w: d.w, years: d.years, msg: `${p.n} pide ${U.money(d.w)} por año.` };
@@ -77,6 +77,7 @@ DT.M = (function () {
     if (fee) {
       DT.E.add(me, 'Fichajes', -fee);
       if (seller) DT.E.add(seller, 'Venta de jugadores', fee);
+      if (seller) M.settleSellOn(p, fee, seller);
     }
     DT.AI.addToTeam(me, p, wage, years);
     p.mor = 80;
@@ -91,6 +92,7 @@ DT.M = (function () {
     const me = DT.userTeam();
     if (!p || p.t !== me.id) return false;
     DT.E.add(me, 'Venta de jugadores', fee);
+    M.settleSellOn(p, fee, me);
     if (buyerId && G.teams[buyerId]) {
       const b = G.teams[buyerId];
       DT.E.add(b, 'Fichajes', -fee);
@@ -141,7 +143,8 @@ DT.M = (function () {
     if (G.renewTries[key] > 4) return { res: 'reject', msg: `${p.n} cortó las negociaciones por esta temporada.` };
     const d = M.renewDemand(p);
     const payroll = DT.E.payroll(me) - p.w;
-    if (payroll + wage > DT.E.wageCap(me) * 1.05) return { res: 'board', msg: 'La directiva no aprueba ese sueldo: se supera el tope salarial.' };
+    // renovar sin subir el sueldo siempre está permitido
+    if (wage > p.w && payroll + wage > DT.E.wageCap(me)) return { res: 'board', msg: `Ese sueldo supera el tope salarial (${U.money(DT.E.wageCap(me))}). Ofrecé lo mismo que cobra hoy, liberá sueldos o pedile a la directiva que amplíe el tope.` };
     if (wage >= d.w || (wage >= d.w * 0.93 && U.chance(0.5))) {
       p.w = wage;
       p.cy = years;
@@ -149,6 +152,111 @@ DT.M = (function () {
       return { res: 'accept' };
     }
     return { res: 'counter', w: d.w, years: d.years, msg: `${p.n} pide ${U.money(d.w)} por año durante ${d.years} años.` };
+  };
+
+  // ---------- Futura venta ----------
+  // Si el jugador tiene un % de futura venta a favor de otro club, se le paga.
+  M.settleSellOn = function (p, fee, sellerTeam) {
+    const so = p.sellOn;
+    if (!so) return;
+    delete p.sellOn;
+    if (!sellerTeam || so.tid === sellerTeam.id) return;
+    const owner = DT.G.teams[so.tid];
+    if (!owner) return;
+    const amt = Math.round(fee * so.pct);
+    DT.E.add(sellerTeam, 'Fichajes', -amt);
+    DT.E.add(owner, 'Venta de jugadores', amt);
+    if (DT.isUser(owner.id)) DT.inbox({ title: 'Cobraste un porcentaje de futura venta', body: `${p.n} fue transferido por ${U.money(fee)} y te corresponde el ${Math.round(so.pct * 100)}%: ${U.money(amt)}.`, kind: 'money' });
+  };
+
+  // ---------- Ojeadores ----------
+  M.scoutCost = (t) => U.round(20000 * (0.3 + DT.E.W(t)), 1000);
+  M.known = function (p) {
+    const G = DT.G;
+    return !p.t || DT.isUser(p.t) || (p.loan && p.loan.from === G.user) || !!(G.scouted && G.scouted[p.id]);
+  };
+  M.scout = function (pid) {
+    const G = DT.G;
+    const me = DT.userTeam();
+    const cost = M.scoutCost(me);
+    if (me.cash < cost) return { ok: false, msg: 'No hay caja para pagar el viaje del ojeador.' };
+    DT.E.add(me, 'Staff', -cost);
+    G.scouted = G.scouted || {};
+    G.scouted[pid] = G.year;
+    const p = G.players[pid];
+    const gap = p.pot - p.ovr;
+    const txt = gap >= 15 ? 'Tiene condiciones de crack: puede crecer muchísimo.' : gap >= 8 ? 'Tiene buen margen de mejora.' : gap >= 3 ? 'Puede mejorar un poco más.' : 'Está en su techo: lo que ves es lo que hay.';
+    return { ok: true, msg: `Informe del ojeador sobre ${p.n}: ${txt} Techo estimado: media ${Math.max(p.ovr, p.pot - 1)}–${p.pot + 1}.` };
+  };
+
+  // ---------- Préstamos de jugadores ----------
+  // Ofertas de clubes para llevarse a préstamo a un jugador del usuario.
+  M.loanOutOffers = function (pid) {
+    const G = DT.G;
+    const p = G.players[pid];
+    const me = DT.userTeam();
+    const cands = Object.values(G.teams).filter((t) => t.lg && !t.eur && t.id !== me.id && t.rep <= me.rep + 4 && t.squad.length < 32 && DT.W.teamLevel(t) <= p.ovr + 6 && t.cash > p.w * 0.5);
+    U.shuffle(cands);
+    return cands.slice(0, 3).map((t) => ({ tid: t.id, fee: U.round(DT.P.value(p) * U.rf(0, 0.06), 5000), starter: DT.W.teamLevel(t) <= p.ovr + 1 }));
+  };
+  M.loanOut = function (pid, tid, fee) {
+    const G = DT.G;
+    const p = G.players[pid];
+    const me = DT.userTeam();
+    const t = G.teams[tid];
+    if (!DT.S.windowOpen()) return { ok: false, msg: 'El libro de pases está cerrado.' };
+    if (me.squad.length <= 18) return { ok: false, msg: 'Te quedarías con muy pocos jugadores.' };
+    DT.AI.release(me, p);
+    p.t = t.id;
+    p.num = null;
+    p.loan = { from: me.id, y: G.year };
+    t.squad.push(p.id);
+    if (fee) { DT.E.add(me, 'Venta de jugadores', fee); DT.E.add(t, 'Fichajes', -fee); }
+    DT.news(`${me.n} cedió a ${p.n} a ${t.n} hasta fin de temporada.`, 'transfer');
+    return { ok: true, msg: `${p.n} se va a préstamo a ${t.n}. ${t.n} paga su sueldo y vuelve a fin de temporada.` };
+  };
+  // Pedido del usuario para traer a préstamo a un jugador de otro club.
+  M.loanInFee = (p) => U.round(DT.P.value(p) * 0.08, 5000);
+  M.loanIn = function (pid) {
+    const G = DT.G;
+    const p = G.players[pid];
+    const me = DT.userTeam();
+    const owner = G.teams[p.t];
+    if (!DT.S.windowOpen()) return { ok: false, msg: 'El libro de pases está cerrado.' };
+    if (p.loan) return { ok: false, msg: 'Ese jugador ya está cedido.' };
+    if (owner.squad.length <= 20) return { ok: false, msg: `${owner.n} tiene el plantel corto y no cede jugadores.` };
+    if (M.importance(p) >= 1.25 && p.age > 21) return { ok: false, msg: `${owner.n} no cede a un titular.` };
+    if (!DT.P.willingToJoin(p, me)) return { ok: false, msg: `${p.n} no quiere ir a préstamo a ${me.n}.` };
+    const fee = M.loanInFee(p);
+    if (fee > M.budget(me)) return { ok: false, msg: `El préstamo cuesta ${U.money(fee)} y no tenés presupuesto.` };
+    if (DT.E.payroll(me) + p.w > DT.E.wageCap(me)) return { ok: false, msg: `Su sueldo (${U.money(p.w)}) supera el tope salarial. Liberá sueldos o pedí más tope a la directiva.` };
+    if (me.squad.length >= 34) return { ok: false, msg: 'El plantel está lleno.' };
+    DT.AI.release(owner, p);
+    p.t = me.id;
+    p.num = null;
+    p.loan = { from: owner.id, y: G.year };
+    me.squad.push(p.id);
+    if (fee) { DT.E.add(me, 'Fichajes', -fee); DT.E.add(owner, 'Venta de jugadores', fee); }
+    DT.news(`${me.n} recibió a préstamo a ${p.n} (${owner.n}).`, 'transfer');
+    return { ok: true, msg: `${p.n} llega a préstamo hasta fin de temporada. Pagaste ${U.money(fee)} y te hacés cargo del sueldo.` };
+  };
+  // Fin de temporada: los cedidos vuelven a su club.
+  M.returnLoans = function () {
+    const G = DT.G;
+    for (const pid in G.players) {
+      const p = G.players[pid];
+      if (!p.loan) continue;
+      const owner = G.teams[p.loan.from];
+      const cur = p.t ? G.teams[p.t] : null;
+      if (cur) DT.AI.release(cur, p);
+      delete p.loan;
+      if (owner) {
+        p.t = owner.id;
+        p.num = null;
+        owner.squad.push(p.id);
+        if (DT.isUser(owner.id)) DT.news(`${p.n} volvió de su préstamo en ${cur ? cur.n : 'otro club'}.`, 'squad');
+      }
+    }
   };
 
   // ---------- IA ----------
@@ -166,10 +274,11 @@ DT.M = (function () {
       if (DT.isUser(t.id)) continue;
       for (const pid of t.squad.slice()) {
         const p = G.players[pid];
-        if (!isForeignTarget(p) || !U.chance(0.022)) continue;
+        if (p.loan || !isForeignTarget(p) || !U.chance(0.022)) continue;
         const fee = U.round(DT.P.value(p) * U.rf(0.9, 1.4), 50000);
         const club = U.pick(DT.FOREIGN_BUYERS);
         DT.E.add(t, 'Venta de jugadores', fee);
+        M.settleSellOn(p, fee, t);
         DT.AI.release(t, p);
         p.from = t.n;
         M.goAbroad(p, fee, club);
@@ -196,7 +305,7 @@ DT.M = (function () {
     for (let tries = 0; tries < 6; tries++) {
       const s = U.pick(sellers);
       if (!s) return;
-      const cands = s.squad.map((id) => G.players[id]).filter((p) => p.pos === need && p.ovr >= L + 1 && p.ovr <= L + 9 && p.age <= 31);
+      const cands = s.squad.map((id) => G.players[id]).filter((p) => !p.loan && p.pos === need && p.ovr >= L + 1 && p.ovr <= L + 9 && p.age <= 31);
       if (!cands.length) continue;
       const p = U.pick(cands);
       const fee = M.askingPrice(p);
@@ -209,6 +318,7 @@ DT.M = (function () {
       if (s.squad.length <= 18) continue;
       DT.E.add(buyer, 'Fichajes', -fee);
       DT.E.add(s, 'Venta de jugadores', fee);
+      M.settleSellOn(p, fee, s);
       DT.AI.addToTeam(buyer, p, Math.max(p.w, DT.P.fairWage(p, buyer.cc)), U.ri(2, 4));
       if (fee >= 3e6 || p.real) DT.news(`${buyer.n} se reforzó con ${p.n} (ex ${s.n}) por ${U.money(fee)}.`, 'transfer');
       DT.AI.trimSquad(buyer, 31);
@@ -226,6 +336,7 @@ DT.M = (function () {
       kind: 'transfer',
       actions: [
         { id: 'sell', label: `Aceptar ${U.money(fee)}` },
+        ...(buyer ? [{ id: 'sellOn', label: `Aceptar ${U.money(U.round(fee * 0.85, 10000))} + 20% de futura venta`, sub: 'Cobrás menos ahora, pero te llevás el 20% si lo vuelven a vender.' }] : []),
         { id: 'counter', label: `Pedir ${U.money(U.round(fee * 1.25, 10000))}` },
         { id: 'reject', label: 'Rechazar' },
       ],
@@ -240,6 +351,7 @@ DT.M = (function () {
     if (pending >= 3) return;
     for (const pid of me.squad) {
       const p = G.players[pid];
+      if (p.loan) continue;
       let prob = 0.004 + (p.lst ? 0.22 : 0);
       if (isForeignTarget(p)) prob += 0.05;
       if (!U.chance(prob)) continue;
@@ -261,12 +373,13 @@ DT.M = (function () {
     let sales = 0;
     while (t.cash < 0 && sales < 3 && t.squad.length > 20) {
       const c = DT.AI.countPos(t);
-      const cands = t.squad.map((id) => G.players[id]).filter((p) => c[p.pos] > (p.pos === 'P' ? 2 : 5)).sort((a, b) => DT.P.value(b) - DT.P.value(a));
+      const cands = t.squad.map((id) => G.players[id]).filter((p) => !p.loan && c[p.pos] > (p.pos === 'P' ? 2 : 5)).sort((a, b) => DT.P.value(b) - DT.P.value(a));
       const p = cands[U.ri(0, Math.min(2, cands.length - 1))];
       if (!p) break;
       const fee = U.round(DT.P.value(p) * U.rf(0.8, 1.05), 10000);
       const club = U.pick(DT.FOREIGN_BUYERS);
       DT.E.add(t, 'Venta de jugadores', fee);
+      M.settleSellOn(p, fee, t);
       DT.AI.release(t, p);
       p.from = t.n;
       M.goAbroad(p, fee, club);

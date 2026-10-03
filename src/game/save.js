@@ -10,7 +10,7 @@ DT.Save = (function () {
     const out = Object.assign({}, G);
     out.players = Object.values(G.players).map((p) => {
       const arr = PF.map((k) => (typeof p[k] === 'number' ? Math.round(p[k] * 100) / 100 : p[k]));
-      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0);
+      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0, (p.num || p.loan || p.sellOn || p.nt) ? { num: p.num, loan: p.loan, sellOn: p.sellOn, nt: p.nt } : 0);
       return arr;
     });
     const S = G.season;
@@ -43,6 +43,13 @@ DT.Save = (function () {
       p.real = !!(fl & 1); p.lst = !!(fl & 2); p.yt = !!(fl & 4); p.played = !!(fl & 8);
       const from = arr[j++];
       if (from) p.from = from;
+      const ex = arr[j++];
+      if (ex) {
+        if (ex.num) p.num = ex.num;
+        if (ex.loan) p.loan = ex.loan;
+        if (ex.sellOn) p.sellOn = ex.sellOn;
+        if (ex.nt) p.nt = ex.nt;
+      }
       players[p.id] = p;
     }
     G.players = players;

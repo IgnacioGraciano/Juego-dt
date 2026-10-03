@@ -36,7 +36,14 @@ DT.E = (function () {
     const tickets = Math.min(t.cap, E.demandBase(t)) * E.refTicket(t) * 18 * 0.65;
     return E.tvAnnual(t) + sponsor * 1.35 + t.socios * t.fee * 12 + tickets + E.merchAnnual(t);
   };
-  E.wageCap = (t) => U.round(E.estimateRevenue(t) * 0.68, 100000);
+  // Tope salarial: nunca por debajo de la masa salarial con la que arrancó la temporada,
+  // y se puede ampliar negociando con la directiva.
+  E.wageCap = (t) => U.round(Math.max(E.estimateRevenue(t) * 0.68, t.capBase || 0) * (1 + (t.capBonus || 0)), 100000);
+  E.resetCap = function (t) {
+    t.capBase = Math.round(E.payroll(t) * 1.03);
+    t.capBonus = 0;
+    t.capAsks = 0;
+  };
 
   E.resetSeasonLedger = function (t) {
     t.fin.cur = { inc: {}, exp: {} };
@@ -67,6 +74,8 @@ DT.E = (function () {
     if (compType === 'cont') compF = 1.3;
     else if (compType === 'cup') compF = stage >= 3 ? 1.2 : 0.85;
     else if (compType === 'final') compF = 1.5;
+    if (DT.isDerby(home.id, away.id)) compF *= 1.25;
+    if (home.anger > 0) compF *= 0.7;
     d *= U.clamp(priceF, 0.2, 2.2) * formF * oppF * compF * U.rf(0.92, 1.06);
     return Math.round(U.clamp(d, 500, home.cap));
   };

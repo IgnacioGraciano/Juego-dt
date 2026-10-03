@@ -49,7 +49,7 @@
       const tm = p.t ? G.teams[p.t] : null;
       return `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}
         <div class="name">${U.esc(p.n)}<div class="sub ellipsis">${tm ? U.esc(tm.n) : 'Libre'} · ${p.age} años · ${free ? `pide ${U.money(DT.P.demand(p, t).w)}/año` : U.money(val)}</div></div>
-        ${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span></div>`;
+        ${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`;
     }).join('');
     return seg + head + filters + `<section class="card"><div class="small muted">${total} jugadores${total > 60 ? ' (se muestran los primeros 60)' : ''}</div><div class="list">${rows || '<div class="empty">No hay jugadores con esos filtros.</div>'}</div></section>`;
   };
@@ -64,6 +64,7 @@
     const offers = G.inbox.filter((m) => m.kind === 'transfer' && m.actions && !m.done);
     return `<section class="card"><h3>Ofertas recibidas</h3>${offers.map(Sc.msg).join('') || '<div class="small muted">No hay ofertas. Poné jugadores en venta para atraer compradores; las ofertas llegan con el libro de pases abierto.</div>'}</section>
       <section class="card"><h3>Jugadores en venta</h3><div class="list">${listed.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">Valor ${U.money(DT.P.value(p))}</div></div><span class="ovr">${p.ovr}</span></div>`).join('') || '<div class="small muted">Ninguno. Abrí la ficha de un jugador y tocá "Poner en venta".</div>'}</div></section>
+      <section class="card"><h3>Cedidos a préstamo</h3><div class="list">${Object.values(G.players).filter((p) => p.loan && p.loan.from === t.id).map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">En ${U.esc(G.teams[p.t].n)} · ${p.st.pj} PJ · ${p.st.g} goles</div></div><span class="ovr">${p.ovr}</span></div>`).join('') || '<div class="small muted">No tenés jugadores cedidos.</div>'}</div></section>
       <section class="card"><h3>Vendidos al exterior</h3><div class="list">${G.abroad.slice(0, 15).map((x) => `<div class="li"><div class="name">${U.esc(x.n)}<div class="sub">${U.esc(x.from || '')} → ${U.esc(x.club)} · ${x.y}</div></div><b class="tab-nums">${U.money(x.fee)}</b></div>`).join('') || '<div class="small muted">Todavía no hubo ventas al exterior.</div>'}</div></section>`;
   };
 
@@ -78,23 +79,33 @@
     const val = DT.P.value(p);
     const avg = DT.P.avgRating(p);
     let actions = '';
-    if (mine) {
+    const known = DT.M.known(p);
+    if (mine && p.loan) {
+      actions = `<div class="small muted">Está a préstamo desde ${U.esc(G.teams[p.loan.from] ? G.teams[p.loan.from].n : 'otro club')} y vuelve a fin de temporada.</div><button class="btn block" data-a="editName" data-id="${p.id}">Editar nombre</button>`;
+    } else if (mine) {
       actions = `<div class="grid2">
         <button class="btn" data-a="renewOpen" data-id="${p.id}">Renovar contrato</button>
         <button class="btn" data-a="toggleList" data-id="${p.id}">${p.lst ? 'Quitar de venta' : 'Poner en venta'}</button>
+        <button class="btn" data-a="loanOutOpen" data-id="${p.id}">Ceder a préstamo</button>
         <button class="btn" data-a="editName" data-id="${p.id}">Editar nombre</button>
         <button class="btn danger" data-a="releaseOpen" data-id="${p.id}">Rescindir</button>
       </div>`;
     } else if (tm && !tm.eur) {
-      actions = `<button class="btn primary block" data-a="buyOpen" data-id="${p.id}">Hacer una oferta</button><button class="btn block" data-a="editName" data-id="${p.id}">Editar nombre</button>`;
+      actions = `<button class="btn primary block" data-a="buyOpen" data-id="${p.id}">Hacer una oferta</button>
+        <div class="grid2">
+          <button class="btn" data-a="loanInOpen" data-id="${p.id}">Pedir a préstamo</button>
+          <button class="btn" data-a="compare" data-id="${p.id}">Comparar</button>
+          ${known ? '' : `<button class="btn" data-a="scout" data-id="${p.id}">Enviar ojeador (${U.money(DT.M.scoutCost(me))})</button>`}
+          <button class="btn" data-a="editName" data-id="${p.id}">Editar nombre</button>
+        </div>`;
     } else if (!tm) {
-      actions = `<button class="btn primary block" data-a="contractOpen" data-id="${p.id}" data-fee="0">Ofrecer contrato (libre)</button>`;
+      actions = `<button class="btn primary block" data-a="contractOpen" data-id="${p.id}" data-fee="0">Ofrecer contrato (libre)</button><button class="btn block" data-a="compare" data-id="${p.id}">Comparar con mi plantel</button>`;
     }
     UI.modal(`
       <div class="row">${tm ? UI.badge(tm, 'l') : ''}<div class="grow"><h2>${U.esc(p.n)}</h2><div class="small muted">${U.posLong[p.pos]} · ${p.age} años · ${tm ? `<span data-a="team" data-id="${tm.id}" style="text-decoration:underline">${U.esc(tm.n)}</span>` : 'Jugador libre'}</div></div><div class="score" style="font-size:2.4rem">${p.ovr}</div></div>
       <div class="row wrap">${UI.status(p)} ${UI.morale(p.mor)} ${p.yt ? '<span class="pill">Cantera</span>' : ''}</div>
       <div class="kv">
-        <div><span>Potencial</span><b>${UI.stars(p.pot)}</b></div>
+        <div><span>Potencial</span><b>${UI.potOf(p)}</b></div>
         <div><span>Valor</span><b>${U.money(val)}</b></div>
         <div><span>Sueldo/año</span><b>${U.money(p.w)}</b></div>
         <div><span>Contrato</span><b>${p.t ? `${p.cy} ${p.cy === 1 ? 'año' : 'años'}` : '—'}</b></div>
@@ -118,7 +129,80 @@
       <div class="row">${UI.badge(t, 'xl')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${t.eur ? 'Europa' : `${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].name)} · ${t.lg ? U.esc(DT.COUNTRIES[t.cc].league) : 'Segunda división'}`}</div></div></div>
       ${t.eur ? '' : `<div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Socios</span><b>${U.num(t.socios)}</b></div><div><span>Estadio</span><b class="ellipsis" style="font-size:.95rem">${U.esc(t.stad)}</b></div><div><span>Capacidad</span><b>${U.num(t.cap)}</b></div><div><span>Formación</span><b>${t.tac.f}</b></div></div>`}
       ${titles.length ? `<div class="small">Títulos recientes: ${titles.map((x) => `${U.esc(x.c)} ${x.y}`).join(' · ')}</div>` : ''}
-      <div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span></div>`).join('')}</div>`);
+      <div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`).join('')}</div>`);
+  };
+
+  A.scout = (d) => {
+    const r = DT.M.scout(+d.id);
+    if (!r.ok) { UI.toast(r.msg); return; }
+    A.player(d);
+    UI.toast(r.msg, 5200);
+  };
+
+  A.compare = (d) => {
+    const G = DT.G;
+    const p = G.players[+d.id];
+    const me = DT.userTeam();
+    const mine = me.squad.map((id) => G.players[id]).filter((x) => x.pos === p.pos).sort((a, b) => b.ovr - a.ovr).slice(0, 2);
+    const cols = [p].concat(mine);
+    const row = (label, f, best) => {
+      const vals = cols.map(f);
+      const nums = vals.map((v) => (typeof v === 'number' ? v : null));
+      const bi = best ? nums.indexOf(best === 'max' ? Math.max(...nums.filter((x) => x !== null)) : Math.min(...nums.filter((x) => x !== null))) : -1;
+      return `<tr><td style="text-align:left" class="muted">${label}</td>${vals.map((v, i) => `<td style="${i === bi ? 'color:var(--win);font-weight:700' : ''}">${typeof v === 'number' && label !== 'Edad' && label !== 'Media' && label !== 'Partidos' && label !== 'Goles' && label !== 'Contrato' ? (label === 'Promedio' ? (v ? v.toFixed(2) : '—') : U.money(v)) : v}</td>`).join('')}</tr>`;
+    };
+    UI.modal(`<h3>Comparar ${U.esc(U.posLong[p.pos].toLowerCase())}s</h3>
+      <div class="tablewrap"><table><thead><tr><th></th>${cols.map((c, i) => `<th style="text-align:right;${i === 0 ? 'color:var(--accent)' : ''}">${U.esc(c.n.split(' ').slice(-1)[0])}</th>`).join('')}</tr></thead><tbody>
+        ${row('Media', (c) => c.ovr, 'max')}
+        ${row('Edad', (c) => c.age)}
+        <tr><td style="text-align:left" class="muted">Potencial</td>${cols.map((c) => `<td>${UI.potOf(c)}</td>`).join('')}</tr>
+        ${row('Valor', (c) => DT.P.value(c))}
+        ${row('Sueldo', (c) => c.w, 'min')}
+        ${row('Contrato', (c) => (c.t ? c.cy : 0))}
+        ${row('Partidos', (c) => c.st.pj, 'max')}
+        ${row('Goles', (c) => c.st.g, 'max')}
+        ${row('Promedio', (c) => DT.P.avgRating(c), 'max')}
+      </tbody></table></div>
+      <div class="small muted">La primera columna es el jugador que estás mirando; las otras, tus mejores ${U.esc(U.posLong[p.pos].toLowerCase())}s.</div>
+      <button class="btn block" data-a="player" data-id="${p.id}">Volver a la ficha</button>`);
+  };
+
+  A.loanOutOpen = (d) => {
+    const G = DT.G;
+    const p = G.players[+d.id];
+    if (!DT.S.windowOpen()) { UI.toast('Las cesiones se hacen con el libro de pases abierto (semanas 0–4 y 21–26).'); return; }
+    const offs = DT.M.loanOutOffers(p.id);
+    UI.modal(`<h3>Ceder a ${U.esc(p.n)}</h3><div class="small muted">Se va hasta fin de temporada, el otro club le paga el sueldo y vuelve con más minutos encima.</div>
+      <div class="list">${offs.map((o) => `<div class="li" data-a="loanOutDo" data-id="${p.id}" data-tid="${o.tid}" data-fee="${o.fee}">${UI.badge(G.teams[o.tid])}<div class="name">${U.esc(G.teams[o.tid].n)}<div class="sub">${o.starter ? 'Sería titular' : 'Pelearía el puesto'} · ${o.fee ? `paga ${U.money(o.fee)}` : 'sin cargo'}</div></div><span class="btn sm primary">Ceder</span></div>`).join('') || '<div class="empty small">Ningún club lo pidió por ahora.</div>'}</div>
+      <button class="btn block" data-a="player" data-id="${p.id}">Volver</button>`);
+  };
+  A.loanOutDo = (d) => {
+    const r = DT.M.loanOut(+d.id, d.tid, +d.fee);
+    UI.closeModal();
+    UI.toast(r.msg, 4000);
+    if (r.ok) DT.Main.autosave();
+    UI.render();
+  };
+  A.loanInOpen = (d) => {
+    const G = DT.G;
+    const p = G.players[+d.id];
+    if (!DT.S.windowOpen()) { UI.toast('Los préstamos se piden con el libro de pases abierto (semanas 0–4 y 21–26).'); return; }
+    UI.modal(`<h3>Pedir a préstamo a ${U.esc(p.n)}</h3>
+      <div class="small">Viene hasta fin de temporada. Costo del préstamo: <b>${U.money(DT.M.loanInFee(p))}</b> y te hacés cargo de su sueldo (${U.money(p.w)}/año). Los clubes no suelen ceder a sus titulares, salvo juveniles.</div>
+      <button class="btn primary block" data-a="loanInDo" data-id="${p.id}">Pedirlo</button><button class="btn block" data-a="player" data-id="${p.id}">Volver</button>`);
+  };
+  A.loanInDo = (d) => {
+    const r = DT.M.loanIn(+d.id);
+    UI.closeModal();
+    UI.toast(r.msg, 4000);
+    if (r.ok) DT.Main.autosave();
+    UI.render();
+  };
+  A.capRaise = () => {
+    const r = DT.Board.askCapRaise();
+    UI.toast(r.msg, 4500);
+    if (NEG.pid && document.querySelector('#modal:not([hidden]) [data-a="negContract"]')) { NEG.msg = r.msg; renderContract(); }
+    else UI.render();
   };
 
   A.toggleList = (d) => {
@@ -236,6 +320,7 @@
       <span class="up">Años de contrato</span>
       <div class="seg">${[1, 2, 3, 4, 5].map((y) => `<button class="${NEG.years === y ? 'on' : ''}" data-a="negYears" data-v="${y}">${y}</button>`).join('')}</div>
       ${NEG.msg ? `<div class="msg pending small">${U.esc(NEG.msg)}</div>` : ''}
+      ${payroll + NEG.wage > DT.E.wageCap(me) ? `<button class="btn block" data-a="capRaise">Pedirle a la directiva más tope salarial</button>` : ''}
       <button class="btn primary block" data-a="negContract">Ofrecer contrato</button>`);
   }
   A.negWage = (d) => { NEG.wage = Math.max(12000, NEG.wage + (+d.v) * stepFor(NEG.wage) / 2); renderContract(); };
@@ -290,6 +375,9 @@
       <section class="card">
         <div class="kv"><div><span>Caja</span><b style="color:${t.cash < 0 ? 'var(--loss)' : 'inherit'}">${U.money(t.cash)}</b></div><div><span>Para fichajes</span><b>${U.money(DT.M.budget(t))}</b></div><div><span>Deuda</span><b>${U.money(DT.E.debt(t))}</b></div></div>
         <div class="small muted">Ingresos estimados por temporada: ${U.money(rev)}. La directiva reserva 4 semanas de sueldos y no permite compras si la caja es negativa.</div>
+        <div class="row between small"><span>Sueldos <b>${U.money(DT.E.payroll(t))}</b>/año</span><span>Tope <b>${U.money(DT.E.wageCap(t))}</b></span></div>
+        <div class="bar ${DT.E.payroll(t) > DT.E.wageCap(t) ? 'bad' : DT.E.payroll(t) > DT.E.wageCap(t) * 0.92 ? 'warn' : ''}"><i style="width:${Math.min(100, (DT.E.payroll(t) / DT.E.wageCap(t)) * 100)}%"></i></div>
+        <button class="btn block" data-a="capRaise" ${(t.capAsks || 0) >= 2 ? 'disabled' : ''}>Pedir más tope salarial a la directiva (${2 - (t.capAsks || 0)} pedidos disponibles)</button>
         ${UI.lineChart(t.fin.bal, { label: 'Evolución de la caja en la temporada' })}
       </section>
       <section class="card">
@@ -412,7 +500,7 @@
       </section>
       <section class="card"><h3>Partidos</h3>
         <span class="up">Velocidad del partido en vivo</span>
-        <div class="seg">${[[1, 'Lenta'], [2, 'Normal'], [4, 'Rápida'], [8, 'Muy rápida']].map(([v, l]) => `<button class="${G.settings.speed === v ? 'on' : ''}" data-a="setSpeed" data-v="${v}">${l}</button>`).join('')}</div>
+        <div class="seg">${[[1, 'Lenta'], [2, 'Normal'], [4, 'Rápida']].map(([v, l]) => `<button class="${G.settings.speed === v ? 'on' : ''}" data-a="setSpeed" data-v="${v}">${l}</button>`).join('')}</div>
       </section>
       <section class="card"><h3>Nueva partida</h3><div class="small muted">Empezar de cero con otro club. Se pierde la partida actual (exportala antes si querés conservarla).</div><button class="btn danger block" data-a="newGameAsk">Empezar una nueva partida</button></section>
       <section class="card flat small muted">Planteles aproximados a la temporada 2025/26. Los clubes con pocos datos completan su plantel con jugadores generados. Podés corregir cualquier nombre desde la ficha del jugador.</section>`;

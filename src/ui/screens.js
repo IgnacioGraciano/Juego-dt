@@ -83,6 +83,13 @@ DT.Screens = (function () {
         <div class="t" data-a="team" data-id="${a.id}">${UI.badge(a, 'l')}<b>${U.esc(a.n)}</b><span class="tiny muted">Media ${DT.AI.rating(a)}</span><span>${UI.formChips(a.form)}</span></div>
       </div>
       <div class="small muted" style="text-align:center">${U.esc(venue)}</div>
+      ${(() => {
+        if (next.w !== G.week) return '';
+        const t = DT.userTeam();
+        const list = (t.autoXI ? [] : DT.AI.lineupIssues(t)).concat(DT.AI.lineupWarnings(t));
+        return list.length ? `<div class="msg pending small">${list.map(U.esc).join('<br>')}<div><button class="btn sm" data-a="tab" data-tab="squad">Revisar el once</button></div></div>` : '';
+      })()}
+      ${DT.isDerby(next.h, next.a) ? `<div style="text-align:center"><span class="pill gold">${U.esc(DT.isDerby(next.h, next.a))}</span></div>` : ''}
     </section>`;
   };
 
@@ -271,7 +278,7 @@ DT.Screens = (function () {
     return `
       <section class="card">
         <div class="kv"><div><span>Jugadores</span><b>${ps.length}</b></div><div><span>Edad prom.</span><b>${U.avg(ps, (p) => p.age).toFixed(1)}</b></div><div><span>Media</span><b>${DT.AI.rating(t)}</b></div></div>
-        <div class="small">Masa salarial: <b>${U.money(payroll)}</b>/año · tope de la directiva ${U.money(cap)}</div>
+        <div class="row between small"><span>Masa salarial: <b>${U.money(payroll)}</b>/año · tope ${U.money(cap)}</span><button class="btn sm" data-a="capRaise">Pedir más</button></div>
         <div class="bar ${payroll > cap ? 'bad' : payroll > cap * 0.9 ? 'warn' : ''}"><i style="width:${Math.min(100, (payroll / cap) * 100)}%"></i></div>
         <div class="chips">${[['pos', 'Puesto'], ['ovr', 'Media'], ['age', 'Edad'], ['val', 'Valor'], ['w', 'Sueldo'], ['cy', 'Contrato'], ['g', 'Goles']].map(([k, l]) => `<button class="chip ${sort === k ? 'on' : ''}" data-a="squadSort" data-v="${k}">${l}</button>`).join('')}</div>
       </section>

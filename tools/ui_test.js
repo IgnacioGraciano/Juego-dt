@@ -55,7 +55,9 @@ const { chromium } = require('playwright');
   }
   await shot('08-previa');
   await click('[data-a="mLive"]');
-  await page.waitForTimeout(2500);
+  await shot('09a-cancha-inicio');
+  await click('[data-a="mToggle"]');
+  await page.waitForTimeout(4000);
   await shot('09-envivo');
   await click('[data-a="mEnd"]');
   await page.waitForTimeout(300);

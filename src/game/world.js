@@ -147,6 +147,7 @@ DT.W = (function () {
     G.manager.clubs.push({ id: tid, n: t.n, from: G.year });
     t.xi = null;
     t.autoXI = true;
+    DT.E.resetCap(t);
     DT.AI.autoLineup(t);
     if (old && old !== tid) DT.news(`${G.manager.n} es el nuevo entrenador de ${t.n}.`, 'club');
   };

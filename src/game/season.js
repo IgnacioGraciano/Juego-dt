@@ -128,6 +128,7 @@ DT.S = (function () {
     for (const id in G.teams) {
       const t = G.teams[id];
       if (t.eur) continue;
+      DT.E.resetCap(t);
       if (!DT.isUser(id)) {
         DT.AI.chooseFormation(t);
         if (!t.sponsor || first) t.sponsor = { name: 'Sponsor', amt: DT.E.sponsorBase(t), kind: 'fijo', bonus: 0 };
@@ -575,6 +576,7 @@ DT.S = (function () {
           if (t.infra.med >= 4 && p.inj > 0 && U.chance(0.15 * (t.infra.med - 3))) p.inj -= 1;
           if (p.inj <= 0 && DT.isUser(id)) DT.news(`${p.n} se recuperó de su lesión.`, 'squad');
         }
+        if (p.nt > 0 && !p.played) p.nt = 0;
         DT.P.weeklyDevelop(p, t.infra.train, p.played);
         p.played = false;
         // la moral vuelve lentamente a 65
@@ -583,6 +585,9 @@ DT.S = (function () {
     }
     DT.M.weekly();
     DT.Board.weekly();
+    if (!DT.G.pendingOffers) DT.Ev.weekly();
+    const ut = DT.userTeam();
+    if (ut.anger > 0) ut.anger--;
   };
 
   // Partidos de la próxima fecha del usuario.

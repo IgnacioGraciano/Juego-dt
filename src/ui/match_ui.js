@@ -1,11 +1,12 @@
-// Pantalla de partido: previa, partido en vivo con cambios, y resultado.
+// Pantalla de partido: previa, partido en vivo con cancha animada y cambios, y resultado.
 DT.MatchUI = (function () {
   const U = DT.U;
   const UI = DT.UI;
   const A = UI.A;
   const MU = {};
-  const SPEED_MS = { 1: 480, 2: 230, 4: 110, 8: 45 };
-  let sim = null, match = null, timer = null, side = 0, selOut = null, seen = 0;
+  const SPEEDS = [[1, 'Lento', 700], [2, 'Normal', 360], [4, 'Rápido', 140]];
+  const tickFor = (v) => (SPEEDS.find((s) => s[0] === v) || SPEEDS[2])[2];
+  let sim = null, match = null, timer = null, side = 0, selOut = null, seen = 0, pitch = null, tab = 'feed', showLineups = false, started = false;
 
   const ov = () => document.getElementById('overlay');
   function show(html) {
@@ -14,16 +15,17 @@ DT.MatchUI = (function () {
     el.hidden = false;
   }
   function hide() {
+    if (pitch) { pitch.stop(); pitch = null; }
     const el = ov();
     el.hidden = true;
     el.innerHTML = '';
   }
+  const $ = (id) => document.getElementById(id);
 
   function oppPreview(team, opp, home) {
     const xi = DT.AI.pickXI(team);
     return DT.Match.preview(team, { f: team.tac.f, m: DT.AI.mentalityVs(team, opp, home), p: team.tac.p }, xi);
   }
-
   function compareBar(label, a, b) {
     const tot = Math.max(1, a + b);
     return `<div class="statline"><b class="tab-nums">${a}</b><div class="stack" style="gap:2px"><span class="tiny muted" style="text-align:center">${label}</span><div class="bars"><i style="width:${(a / tot) * 100}%"></i><i style="width:${(b / tot) * 100}%"></i></div></div><b class="tab-nums" style="text-align:right">${b}</b></div>`;
@@ -41,6 +43,8 @@ DT.MatchUI = (function () {
     const pa = side === 1 ? DT.Match.preview(me) : oppPreview(a, h, false);
     const comp = G.season.comps[m.c];
     const issues = DT.AI.lineupIssues(me);
+    const warns = DT.AI.lineupWarnings(me);
+    const derby = DT.isDerby(m.h, m.a);
     let tieInfo = '';
     if (m.tie && m.leg === 2) {
       const tie = G.season.ties[m.tie];
@@ -49,6 +53,7 @@ DT.MatchUI = (function () {
     } else if (m.tie && G.season.ties[m.tie].single) tieInfo = '<div class="small muted" style="text-align:center">Partido único: si empatan, penales.</div>';
     show(`
       <div class="row between"><span class="kicker">${U.esc(DT.S.matchLabel(m))}</span><button class="btn sm" data-a="mClose">Volver</button></div>
+      ${derby ? `<div style="text-align:center"><span class="pill gold">${U.esc(derby)}</span></div>` : ''}
       <div class="matchup">
         <div class="t">${UI.badge(h, 'xl')}<b>${U.esc(h.n)}</b><span>${UI.formChips(h.form)}</span></div>
         <div class="vs">vs</div>
@@ -64,13 +69,15 @@ DT.MatchUI = (function () {
       </section>
       <section class="card">
         <div class="row between"><b>Tu equipo: ${U.esc(me.tac.f)}</b><button class="btn sm" data-a="mEditXI">Editar once</button></div>
-        ${issues.length ? `<div class="small" style="color:var(--loss)">${issues.map(U.esc).join(' ')}</div>` : `<div class="small muted">${me.xi.map((id) => G.players[id]).filter(Boolean).map((p) => U.esc(p.n.split(' ').slice(-1)[0])).join(', ')}</div>`}
+        ${issues.length ? `<div class="msg pending small" style="border-left-color:var(--loss)">${issues.map(U.esc).join(' ')}</div>` : ''}
+        ${warns.length ? `<div class="msg pending small">${warns.map(U.esc).join('<br>')}</div>` : ''}
+        <div class="small muted">${me.xi.map((id) => G.players[id]).filter(Boolean).map((p) => U.esc(p.n.split(' ').slice(-1)[0])).join(', ')}</div>
         <span class="up">Mentalidad</span>
         <div class="seg">${DT.MENTALITY.map((x, i) => `<button class="${me.tac.m === i ? 'on' : ''}" data-a="mMent" data-v="${i}">${['M. def', 'Def', 'Equil', 'Of', 'M. of'][i]}</button>`).join('')}</div>
         <span class="up">Presión</span>
         <div class="seg">${DT.PRESSURE.map((x, i) => `<button class="${me.tac.p === i ? 'on' : ''}" data-a="mPress" data-v="${i}">${x}</button>`).join('')}</div>
       </section>
-      <button class="btn primary block big" data-a="mLive">Jugar en vivo</button>
+      <button class="btn primary block big" data-a="mLive">Ir a la cancha</button>
       <button class="btn block" data-a="mQuick">Simular resultado</button>`);
   };
   A.mClose = () => { hide(); UI.render(); };
@@ -78,14 +85,13 @@ DT.MatchUI = (function () {
   A.mMent = (d) => { DT.userTeam().tac.m = +d.v; MU.open(match); };
   A.mPress = (d) => { DT.userTeam().tac.p = +d.v; MU.open(match); };
 
-  // ---------- en vivo ----------
-  A.mLive = () => {
-    sim = DT.Match.create(match);
-    sim.autoSubs = false;
-    selOut = null;
-    seen = 0;
-    renderLive();
-    play();
+  // Resultado directo, sin pantalla previa.
+  MU.quick = function (m) {
+    match = m;
+    side = m.h === DT.G.user ? 0 : 1;
+    const me = DT.userTeam();
+    if (me.autoXI || DT.AI.lineupIssues(me).length) DT.AI.autoLineup(me);
+    A.mQuick();
   };
   A.mQuick = () => {
     sim = DT.Match.create(match);
@@ -94,9 +100,21 @@ DT.MatchUI = (function () {
     finish();
   };
 
+  // ---------- en vivo ----------
+  A.mLive = () => {
+    sim = DT.Match.create(match);
+    sim.autoSubs = false;
+    selOut = null;
+    seen = 0;
+    tab = 'feed';
+    started = false;
+    renderLive();
+  };
+
   function play() {
     stop();
-    const ms = SPEED_MS[DT.G.settings.speed] || 230;
+    const ms = tickFor(DT.G.settings.speed);
+    if (pitch) pitch.setTick(ms);
     timer = setInterval(tick, ms);
     sim.running = true;
   }
@@ -107,28 +125,77 @@ DT.MatchUI = (function () {
   }
   function tick() {
     if (!sim) return stop();
+    const half = sim.half;
     DT.Match.step(sim);
-    if (sim.done) { stop(); finish(); return; }
-    if (sim.paused) { stop(); }
+    if (sim.done) {
+      DT.Sound.whistle(3);
+      stop();
+      if (pitch) pitch.banner('FINAL', `${sim.s[0].goals} - ${sim.s[1].goals}`, 1600);
+      updateLive();
+      setTimeout(finish, 1300);
+      return;
+    }
+    if (sim.half !== half) {
+      DT.Sound.whistle(2);
+      if (pitch) { pitch.kickoff(); pitch.banner('ENTRETIEMPO', `${sim.s[0].goals} - ${sim.s[1].goals}`, 2500); }
+    } else if (pitch) pitch.minute();
+    if (sim.paused) {
+      stop();
+      tab = 'subs';
+    }
     updateLive();
   }
 
-  function scoreboard() {
+  const WX_ICON = { Despejado: '☀', Nublado: '☁', 'Parcialmente nublado': '⛅', Lluvia: '☂', Llovizna: '☂' };
+  function header() {
     const G = DT.G;
     const h = G.teams[match.h], a = G.teams[match.a];
     const min = sim.min > 90 ? `90+${sim.min - 90}'` : sim.half === 1 && sim.min > 45 ? `45+${sim.min - 45}'` : `${sim.min}'`;
-    return `<div class="scoreboard" id="sb">
-      <div class="t">${UI.badge(h, 'l')}<b>${U.esc(h.s)}</b></div>
-      <div><div class="sc tab-nums">${sim.s[0].goals} - ${sim.s[1].goals}</div><div class="min">${sim.done ? 'Final' : sim.paused === 'ht' ? 'Entretiempo' : min}</div></div>
-      <div class="t">${UI.badge(a, 'l')}<b>${U.esc(a.s)}</b></div></div>`;
+    const w = sim.weather;
+    const st = sim.done ? 'Final' : sim.paused === 'ht' ? 'Entretiempo' : min;
+    return `<div class="mhead" id="mhead">
+      <div class="mt">${UI.badge(h)}<b>${U.esc(h.n)}</b><span class="meta">${match.n ? 'Neutral' : 'Local'} · ${sim.s[0].tac.f}</span></div>
+      <div class="mc"><div class="sc tab-nums">${sim.s[0].goals} – ${sim.s[1].goals}</div><div class="min">${st}</div></div>
+      <div class="mt">${UI.badge(a)}<b>${U.esc(a.n)}</b><span class="meta">Visitante · ${sim.s[1].tac.f}</span></div>
+      ${w ? `<div class="wx">${WX_ICON[w.sky] || ''} ${w.sky} · ${w.min}° a ${w.max}°</div>` : ''}
+    </div>`;
+  }
+  function controls() {
+    const sp = DT.G.settings.speed;
+    const running = sim.running;
+    const label = !started ? 'Empezar' : running ? 'Pausa' : sim.paused === 'ht' ? '2º tiempo' : 'Seguir';
+    return `<div class="mctl">
+      <button class="btn sm ${running ? '' : 'primary'}" data-a="mToggle">${running ? '❚❚' : '▶'} ${label}</button>
+      <div class="seg sm">${SPEEDS.map(([v, l]) => `<button class="${(sp === v || (v === 4 && sp === 8)) ? 'on' : ''}" data-a="mSpeed" data-v="${v}">${l}</button>`).join('')}</div>
+      <button class="btn sm ${DT.G.settings.sound !== false ? 'gold' : ''}" data-a="mSound">${DT.G.settings.sound !== false ? '✓ ' : ''}Sonido</button>
+      <button class="btn sm" data-a="mLineups">${showLineups ? '▴ Ocultar planteo' : '▾ Ver planteo'}</button>
+    </div>`;
+  }
+  function note() {
+    if (sim.paused === 'ht') return '<div class="msg pending small">Entretiempo. Hacé cambios o ajustá la táctica antes del segundo tiempo.</div>';
+    if (sim.paused === 'inj' && sim.injuredPid) return `<div class="msg pending small">${U.esc(DT.G.players[sim.injuredPid].n)} se lesionó. Elegí un reemplazo en Cambios.</div>`;
+    return '';
+  }
+  function lineups() {
+    if (!showLineups) return '';
+    const G = DT.G;
+    const col = (i) => {
+      const s = sim.s[i];
+      const t = G.teams[s.tid];
+      return `<div class="stack" style="gap:2px;min-width:0"><b class="small">${U.esc(t.s)} · ${s.tac.f}</b>${s.on.map((x) => {
+        const p = G.players[x.id];
+        return `<div class="tiny row" style="gap:6px"><b class="tab-nums" style="min-width:18px;text-align:right">${p.num || ''}</b><span class="ellipsis">${U.esc(p.n)}</span></div>`;
+      }).join('')}</div>`;
+    };
+    return `<section class="card"><div class="grid2">${col(0)}${col(1)}</div></section>`;
   }
   function stats() {
     const s0 = sim.s[0], s1 = sim.s[1];
     const pt = Math.max(1, s0.poss + s1.poss);
     const p0 = Math.round((s0.poss / pt) * 100);
     const line = (l, a, b, pa, pb) => `<div class="statline"><b class="tab-nums">${a}</b><div class="stack" style="gap:2px"><span class="tiny muted" style="text-align:center">${l}</span><div class="bars"><i style="width:${pa}%"></i><i style="width:${pb}%"></i></div></div><b class="tab-nums" style="text-align:right">${b}</b></div>`;
-    const sh = Math.max(1, s0.shots + s1.shots), so = Math.max(1, s0.sot + s1.sot);
-    return line('Posesión', p0 + '%', 100 - p0 + '%', p0, 100 - p0) + line('Remates', s0.shots, s1.shots, (s0.shots / sh) * 100, (s1.shots / sh) * 100) + line('Al arco', s0.sot, s1.sot, (s0.sot / so) * 100, (s1.sot / so) * 100);
+    const sh = Math.max(1, s0.shots + s1.shots), so = Math.max(1, s0.sot + s1.sot), ye = Math.max(1, s0.yel + s1.yel);
+    return line('Posesión', p0 + '%', 100 - p0 + '%', p0, 100 - p0) + line('Remates', s0.shots, s1.shots, (s0.shots / sh) * 100, (s1.shots / sh) * 100) + line('Al arco', s0.sot, s1.sot, (s0.sot / so) * 100, (s1.sot / so) * 100) + line('Amarillas', s0.yel, s1.yel, (s0.yel / ye) * 100, (s1.yel / ye) * 100);
   }
   function feed() {
     const evs = sim.events.slice().reverse().slice(0, 40);
@@ -138,59 +205,65 @@ DT.MatchUI = (function () {
       const ic = e.type === 'yellow' ? '<span class="ic yellow"></span>' : e.type === 'red' ? '<span class="ic red"></span>' : '';
       const team = e.side >= 0 ? DT.G.teams[sim.s[e.side].tid].s : '';
       return `<div class="ev ${e.type} ${i < fresh ? 'new' : ''}"><span class="m">${e.m}'</span>${ic}<span class="grow">${team ? `<b class="tiny muted">${U.esc(team)}</b> ` : ''}${U.esc(e.text)}</span></div>`;
-    }).join('') || '<div class="small muted">Rueda la pelota…</div>';
+    }).join('') || '<div class="small muted">Tocá Empezar para que ruede la pelota.</div>';
   }
-  function controls() {
-    const sp = DT.G.settings.speed;
-    const paused = !sim.running;
-    let note = '';
-    if (sim.paused === 'ht') note = '<div class="msg pending small">Entretiempo. Hacé cambios o ajustá la táctica antes del segundo tiempo.</div>';
-    if (sim.paused === 'inj') note = `<div class="msg pending small">${U.esc(DT.G.players[sim.injuredPid].n)} se lesionó. Elegí un reemplazo abajo.</div>`;
-    return `${note}<div class="grid3">
-      <button class="btn ${paused ? 'primary' : ''}" data-a="mToggle">${paused ? (sim.paused === 'ht' ? '2º tiempo' : 'Seguir') : 'Pausa'}</button>
-      <button class="btn" data-a="mSpeed">Vel. ${sp}x</button>
-      <button class="btn" data-a="mEnd">Ir al final</button></div>`;
-  }
-  function panel() {
+  function subsPanel() {
     const G = DT.G;
     const s = sim.s[side];
     const on = s.on.map((x) => {
       const p = G.players[x.id];
-      return `<div class="li ${selOut === x.id ? 'sel' : ''}" data-a="mSelOut" data-id="${x.id}"><span class="pos ${x.slot}">${U.posName[x.slot]}</span><div class="name">${U.esc(p.n)}${p.inj > 0 ? ' <span class="pill bad">Lesionado</span>' : ''}${s.cards && s.cards[x.id] ? ' <span class="ic yellow" style="display:inline-block;width:9px;height:12px;background:#f2c200;border-radius:2px"></span>' : ''}<div class="sub">Nota ${(s.rating[x.id] || 6).toFixed(1)}</div></div>${UI.fitBar(p.fit)}<span class="ovr">${p.ovr}</span></div>`;
+      return `<div class="li ${selOut === x.id ? 'sel' : ''}" data-a="mSelOut" data-id="${x.id}"><span class="pos ${x.slot}">${U.posName[x.slot]}</span><div class="name">${p.num ? `<span class="muted tab-nums">${p.num}</span> ` : ''}${U.esc(p.n)}${p.inj > 0 ? ' <span class="pill bad">Lesionado</span>' : ''}${s.cards && s.cards[x.id] ? ' <span class="pill warn">Amonestado</span>' : ''}<div class="sub">Nota ${(s.rating[x.id] || 6).toFixed(1)}</div></div>${UI.fitBar(p.fit)}<span class="ovr">${p.ovr}</span></div>`;
     }).join('');
     const bench = s.bench.map((id) => G.players[id]).filter(Boolean).map((p) => `<div class="li" data-a="mSelIn" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}</div>${UI.fitBar(p.fit)}<span class="ovr">${p.ovr}</span></div>`).join('');
-    return `<section class="card">
-      <div class="row between"><h3>Cambios</h3><span class="pill">${5 - s.subs} disponibles</span></div>
-      <div class="small muted">${selOut ? 'Ahora tocá el suplente que entra.' : 'Tocá el jugador que sale y después el que entra.'}</div>
+    return `<div class="row between"><h3>Cambios</h3><span class="pill">${5 - s.subs} disponibles</span></div>
+      <div class="small muted">${selOut ? 'Ahora tocá el suplente que entra.' : 'Tocá el jugador que sale y después el que entra. Conviene pausar antes.'}</div>
       <div class="list">${on}</div>
       <div class="up">Banco</div><div class="list">${bench || '<div class="small muted">Sin suplentes.</div>'}</div>
       <span class="up">Mentalidad</span>
       <div class="seg">${DT.MENTALITY.map((x, i) => `<button class="${s.tac.m === i ? 'on' : ''}" data-a="mLiveMent" data-v="${i}">${['M. def', 'Def', 'Equil', 'Of', 'M. of'][i]}</button>`).join('')}</div>
       <span class="up">Presión</span>
       <div class="seg">${DT.PRESSURE.map((x, i) => `<button class="${s.tac.p === i ? 'on' : ''}" data-a="mLivePress" data-v="${i}">${x}</button>`).join('')}</div>
-      <label class="toggle small"><input type="checkbox" id="autosubs" data-c="mAutoSubs" ${sim.autoSubs ? 'checked' : ''}> Cambios automáticos por cansancio</label>
-    </section>`;
+      <label class="toggle small"><input type="checkbox" id="autosubs" data-c="mAutoSubs" ${sim.autoSubs ? 'checked' : ''}> Cambios automáticos por cansancio</label>`;
+  }
+  function tabBody() {
+    if (tab === 'stats') return stats();
+    if (tab === 'subs') return subsPanel();
+    return `<div class="feed">${feed()}</div>`;
+  }
+  function tabs() {
+    return `<div class="seg" id="mtabs">${[['feed', 'Relato'], ['stats', 'Estadísticas'], ['subs', 'Cambios y táctica']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-a="mTab" data-v="${k}">${l}</button>`).join('')}</div>`;
   }
   function renderLive() {
-    show(`<span class="kicker">${U.esc(DT.S.matchLabel(match))}</span>
-      ${scoreboard()}
+    show(`<span class="kicker">${U.esc(DT.S.matchLabel(match))}${sim.derby ? ` · ${U.esc(sim.derby)}` : ''}</span>
+      ${header()}
+      <div class="pitchwrap"><canvas id="pitchcv" aria-label="Cancha con la posición de los jugadores y la pelota"></canvas></div>
       <div id="ctl">${controls()}</div>
-      <section class="card"><div id="stats">${stats()}</div></section>
-      <section class="card"><div class="feed" id="feed">${feed()}</div></section>
-      <div id="panel">${panel()}</div>`);
+      <div id="note">${note()}</div>
+      <div id="lineups">${lineups()}</div>
+      <div id="tabswrap">${tabs()}</div>
+      <section class="card" id="mtab">${tabBody()}</section>
+      <button class="btn block" data-a="mEnd">Ir al final</button>`);
+    if (pitch) pitch.stop();
+    pitch = DT.Pitch($('pitchcv'), sim);
+    pitch.setTick(tickFor(DT.G.settings.speed));
+    pitch.start();
   }
-  function updateLive() {
-    const sb = document.getElementById('sb');
-    if (!sb) return renderLive();
-    sb.outerHTML = scoreboard();
-    document.getElementById('stats').innerHTML = stats();
-    if (sim.events.length !== seen) document.getElementById('feed').innerHTML = feed();
-    document.getElementById('ctl').innerHTML = controls();
-    if (sim.paused || sim.min % 5 === 0) document.getElementById('panel').innerHTML = panel();
+  function updateLive(full) {
+    if (!$('mhead')) return;
+    $('mhead').outerHTML = header();
+    $('ctl').innerHTML = controls();
+    $('note').innerHTML = note();
+    $('tabswrap').innerHTML = tabs();
+    if (full || tab === 'stats' || (tab === 'feed' && sim.events.length !== seen) || (tab === 'subs' && (sim.paused || !sim.running))) $('mtab').innerHTML = tabBody();
   }
 
+  A.mTab = (d) => { tab = d.v; updateLive(true); };
+  A.mLineups = () => { showLineups = !showLineups; $('lineups').innerHTML = lineups(); $('ctl').innerHTML = controls(); };
+  A.mSound = () => { DT.G.settings.sound = DT.G.settings.sound === false; DT.Sound.unlock(); $('ctl').innerHTML = controls(); };
   A.mToggle = () => {
-    if (sim.running) { stop(); updateLive(); return; }
+    DT.Sound.unlock();
+    if (sim.running) { stop(); updateLive(true); return; }
+    if (!started) { started = true; DT.Sound.whistle(1); }
     // al reanudar, si quedó un lesionado en cancha, entra el mejor suplente
     if (sim.paused === 'inj' && sim.injuredPid) {
       const s = sim.s[side];
@@ -201,17 +274,18 @@ DT.MatchUI = (function () {
         else { s.on = s.on.filter((o) => o.id !== x.id); s.out.push(x.id); }
       }
     }
+    if (sim.paused === 'ht') DT.Sound.whistle(1);
     sim.paused = null;
     sim.injuredPid = null;
+    if (tab === 'subs') tab = 'feed';
     play();
-    updateLive();
+    updateLive(true);
   };
-  A.mSpeed = () => {
-    const order = [1, 2, 4, 8];
-    const G = DT.G;
-    G.settings.speed = order[(order.indexOf(G.settings.speed) + 1) % order.length];
+  A.mSpeed = (d) => {
+    DT.G.settings.speed = +d.v;
     if (sim.running) play();
-    updateLive();
+    else if (pitch) pitch.setTick(tickFor(+d.v));
+    $('ctl').innerHTML = controls();
   };
   A.mEnd = () => {
     stop();
@@ -219,27 +293,28 @@ DT.MatchUI = (function () {
     while (!sim.done) { DT.Match.step(sim); sim.paused = null; }
     finish();
   };
-  A.mSelOut = (d) => { selOut = +d.id; document.getElementById('panel').innerHTML = panel(); };
+  A.mSelOut = (d) => { selOut = +d.id; $('mtab').innerHTML = tabBody(); };
   A.mSelIn = (d) => {
     if (!selOut) { UI.toast('Primero tocá el jugador que sale.'); return; }
     const s = sim.s[side];
     if (s.subs >= 5) { UI.toast('Ya hiciste los 5 cambios.'); return; }
     const outId = selOut;
     if (DT.Match.sub(sim, side, outId, +d.id)) {
-      if (sim.injuredPid === outId) { sim.injuredPid = null; }
+      if (sim.injuredPid === outId) sim.injuredPid = null;
       selOut = null;
-      updateLive();
-      document.getElementById('panel').innerHTML = panel();
+      updateLive(true);
     }
   };
-  A.mLiveMent = (d) => { sim.s[side].tac.m = +d.v; document.getElementById('panel').innerHTML = panel(); };
-  A.mLivePress = (d) => { sim.s[side].tac.p = +d.v; document.getElementById('panel').innerHTML = panel(); };
+  A.mLiveMent = (d) => { sim.s[side].tac.m = +d.v; $('mtab').innerHTML = tabBody(); };
+  A.mLivePress = (d) => { sim.s[side].tac.p = +d.v; $('mtab').innerHTML = tabBody(); };
   A.mAutoSubs = (d, el) => { sim.autoSubs = el.checked; };
 
   // ---------- final ----------
   function finish() {
     const G = DT.G;
+    if (!sim) return;
     stop();
+    if (pitch) { pitch.stop(); pitch = null; }
     if (DT.S.needsPens(match, sim.s[0].goals, sim.s[1].goals)) DT.Match.penalties(sim);
     DT.Match.apply(sim);
     DT.S.record(match, sim);

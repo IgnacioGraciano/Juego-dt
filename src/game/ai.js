@@ -95,6 +95,26 @@ DT.AI = (function () {
     return issues;
   };
 
+  // Avisos antes del partido: problemas graves y cosas a revisar.
+  AI.lineupWarnings = function (team) {
+    const G = DT.G;
+    const warn = [];
+    if (!team.xi) return warn;
+    const F = DT.FORMATIONS[team.tac.f];
+    const tired = [], outPos = [];
+    team.xi.forEach((pid, i) => {
+      const p = G.players[pid];
+      if (!p || !DT.P.available(p)) return;
+      if (p.fit < 70) tired.push(`${p.n.split(' ').slice(-1)[0]} (${Math.round(p.fit)}%)`);
+      if (AI.posFactor(p.pos, F.l[i]) < 1) outPos.push(p.n.split(' ').slice(-1)[0]);
+    });
+    if (tired.length) warn.push(`Cansados en el once: ${tired.join(', ')}.`);
+    if (outPos.length) warn.push(`Fuera de su puesto: ${outPos.join(', ')}.`);
+    const unhappy = team.xi.map((id) => G.players[id]).filter((p) => p && p.mor < 30);
+    if (unhappy.length) warn.push(`Con la moral por el piso: ${unhappy.map((p) => p.n.split(' ').slice(-1)[0]).join(', ')}.`);
+    return warn;
+  };
+
   // Media del equipo (mejor once sin importar estado físico).
   AI.rating = function (team) {
     const G = DT.G;
@@ -148,6 +168,7 @@ DT.AI = (function () {
       if (old) AI.release(old, p);
     }
     p.t = team.id;
+    p.num = null;
     p.w = wage;
     p.cy = years;
     p.lst = false;
@@ -185,7 +206,7 @@ DT.AI = (function () {
     max = max || 30;
     while (team.squad.length > max) {
       const c = AI.countPos(team);
-      const cands = team.squad.map((id) => G.players[id]).filter((p) => c[p.pos] > MIN[p.pos]);
+      const cands = team.squad.map((id) => G.players[id]).filter((p) => !p.loan && c[p.pos] > MIN[p.pos]);
       if (!cands.length) break;
       cands.sort((a, b) => (a.ovr + (a.age < 22 ? 6 : 0)) - (b.ovr + (b.age < 22 ? 6 : 0)));
       AI.release(team, cands[0]);

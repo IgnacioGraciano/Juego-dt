@@ -160,6 +160,7 @@ DT.End = (function () {
     const G = DT.G;
     const me = DT.userTeam();
     const leaving = [], retired = [];
+    DT.M.returnLoans();
     for (const pid in G.players) {
       const p = G.players[pid];
       const team = p.t ? G.teams[p.t] : null;
@@ -184,6 +185,15 @@ DT.End = (function () {
         }
       }
     }
+    // Joyas de inferiores que esperaban a fin de temporada
+    for (const y of G.pendingYouth || []) {
+      const t = G.teams[y.t];
+      if (!t || !DT.isUser(t.id)) continue;
+      const p = DT.P.create({ n: y.n, pos: y.pos, age: y.age + 1, ovr: y.ovr, pot: y.pot, t: t.id, cy: 4, yt: true });
+      p.w = 15000;
+      t.squad.push(p.id);
+    }
+    G.pendingYouth = [];
     // IA: renovaciones, juveniles y completar planteles
     for (const id in G.teams) {
       const t = G.teams[id];

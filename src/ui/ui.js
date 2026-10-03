@@ -36,12 +36,16 @@ DT.UI = (function () {
   UI.teamName = (t, cls) => `<span class="${cls || ''}" data-a="team" data-id="${t.id}">${U.esc(t.n)}</span>`;
   UI.pos = (p) => `<span class="pos ${p.pos}">${U.posName[p.pos]}</span>`;
   UI.stars = (pot) => `<span class="stars" aria-label="Potencial ${DT.P.stars(pot)} de 5">${'★'.repeat(DT.P.stars(pot))}<span style="opacity:.25">${'★'.repeat(5 - DT.P.stars(pot))}</span></span>`;
+  // Potencial: solo se ve si es de tu club, es libre o lo ojeaste.
+  UI.potOf = (p) => (DT.M.known(p) ? UI.stars(p.pot) : '<span class="pill" title="Mandá un ojeador para conocer su potencial">? ojear</span>');
   UI.fitBar = (fit) => `<div class="bar ${fit < 55 ? 'bad' : fit < 75 ? 'warn' : ''}" style="width:44px" title="Físico ${Math.round(fit)}%"><i style="width:${Math.round(fit)}%"></i></div>`;
   UI.morale = (m) => (m >= 75 ? '<span class="pill ok">Feliz</span>' : m >= 45 ? '' : m >= 30 ? '<span class="pill warn">Molesto</span>' : '<span class="pill bad">Enojado</span>');
   UI.status = (p) => {
     let s = '';
     if (p.inj > 0) s += `<span class="pill bad">Lesión ${p.inj} sem</span>`;
     if (p.sus > 0) s += `<span class="pill bad">Suspendido</span>`;
+    if (p.nt > 0) s += '<span class="pill warn">Con la selección</span>';
+    if (p.loan) s += `<span class="pill">${p.loan.from === DT.G.user ? 'Cedido' : 'A préstamo'}</span>`;
     if (p.lst) s += '<span class="pill warn">En venta</span>';
     if (p.cy <= 1 && p.t && DT.isUser(p.t)) s += '<span class="pill warn">Último año</span>';
     return s;
@@ -93,7 +97,9 @@ DT.UI = (function () {
       const opp = DT.team(um.h === DT.G.user ? um.a : um.h);
       label = `Jugar vs ${opp.s}`;
     } else if (DT.G.week > DT.S.LAST_WEEK) label = 'Cerrar temporada';
-    el.innerHTML = `<div class="inner"><button class="btn primary block big" data-a="advance">${label}</button></div>`;
+    el.innerHTML = um
+      ? `<div class="inner" style="display:flex;gap:8px"><button class="btn primary big" style="flex:1" data-a="advance">${label}</button><button class="btn big" style="background:var(--surface);box-shadow:none" data-a="quickMatch">Simular</button></div>`
+      : `<div class="inner"><button class="btn primary block big" data-a="advance">${label}</button></div>`;
   };
 
   UI.render = function () {
@@ -105,6 +111,10 @@ DT.UI = (function () {
     UI.renderCTA();
   };
 
+  UI.A.quickMatch = () => {
+    const um = DT.S.userMatchNow();
+    if (um) DT.MatchUI.quick(um);
+  };
   UI.A.tab = (d) => {
     UI.tab = d.tab;
     UI.sel = null;

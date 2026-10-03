@@ -41,3 +41,19 @@ DT.EUROPE = [
 
 // Compradores europeos y de otras ligas que pescan talento sudamericano.
 DT.FOREIGN_BUYERS = ['Benfica', 'Porto', 'Sporting CP', 'Atlético de Madrid', 'Sevilla', 'Real Betis', 'Villarreal', 'Chelsea', 'Brighton', 'Manchester United', 'Tottenham', 'Juventus', 'Inter', 'Milan', 'Napoli', 'Roma', 'Atalanta', 'Lyon', 'Marsella', 'Mónaco', 'Ajax', 'PSV', 'Feyenoord', 'Bayer Leverkusen', 'RB Leipzig', 'Borussia Dortmund', 'Al-Hilal', 'Al-Nassr', 'Inter Miami', 'LA Galaxy', 'Atlanta United', 'Club América', 'Monterrey', 'Tigres', 'Zenit', 'Galatasaray', 'Fenerbahçe', 'Olympiacos'];
+
+// Clásicos: más público, más presión y más impacto en la moral.
+DT.DERBIES = [
+  ['ARG_RIV', 'ARG_BOC', 'Superclásico'], ['ARG_RAC', 'ARG_IND', 'Clásico de Avellaneda'], ['ARG_SLO', 'ARG_HUR', 'Clásico de Boedo y Parque Patricios'],
+  ['ARG_EST', 'ARG_GLP', 'Clásico platense'], ['ARG_RCE', 'ARG_NOB', 'Clásico rosarino'], ['ARG_TAL', 'ARG_BEL', 'Clásico cordobés'], ['ARG_SLO', 'ARG_BOC', 'Clásico'], ['ARG_RIV', 'ARG_IND', 'Clásico'], ['ARG_VEL', 'ARG_SLO', 'Clásico'],
+  ['BRA_FLA', 'BRA_FLU', 'Fla-Flu'], ['BRA_FLA', 'BRA_VAS', 'Clásico de los Millones'], ['BRA_BOT', 'BRA_FLA', 'Clássico da Rivalidade'], ['BRA_COR', 'BRA_PAL', 'Derby Paulista'], ['BRA_COR', 'BRA_SAO', 'Majestoso'],
+  ['BRA_PAL', 'BRA_SAO', 'Choque-Rei'], ['BRA_SAN', 'BRA_COR', 'Clássico Alvinegro'], ['BRA_GRE', 'BRA_INT', 'Gre-Nal'], ['BRA_CRU', 'BRA_CAM', 'Clássico Mineiro'], ['BRA_BAH', 'BRA_VIT', 'Ba-Vi'], ['BRA_CEA', 'BRA_FOR', 'Clássico-Rei'],
+  ['URU_PEN', 'URU_NAC', 'Clásico uruguayo'], ['CHI_COL', 'CHI_UCH', 'Superclásico chileno'], ['CHI_COL', 'CHI_UCA', 'Clásico'], ['CHI_UCH', 'CHI_UCA', 'Clásico universitario'],
+  ['COL_NAL', 'COL_DIM', 'Clásico paisa'], ['COL_MIL', 'COL_SFE', 'Clásico capitalino'], ['COL_AME', 'COL_CAL', 'Clásico vallecaucano'], ['COL_NAL', 'COL_MIL', 'Clásico'],
+  ['PAR_OLI', 'PAR_CCP', 'Superclásico paraguayo'], ['PER_UNI', 'PER_ALI', 'Clásico peruano'], ['PER_ALI', 'PER_SCR', 'Clásico'], ['ECU_BSC', 'ECU_EME', 'Clásico del Astillero'], ['ECU_LDU', 'ECU_NAC', 'Clásico capitalino'],
+  ['BOL_BOL', 'BOL_STR', 'Clásico paceño'], ['VEN_TAC', 'VEN_CAR', 'Clásico venezolano'],
+];
+DT.isDerby = function (a, b) {
+  const d = DT.DERBIES.find((x) => (x[0] === a && x[1] === b) || (x[0] === b && x[1] === a));
+  return d ? d[2] : null;
+};

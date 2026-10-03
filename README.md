@@ -19,8 +19,11 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 - Clasificación real a las copas según la posición en la liga y el campeón de la copa nacional.
 
 **Partidos**
-- Simulación minuto a minuto con relato, goles, tarjetas, lesiones y penales.
-- Partido en vivo con pausa, 5 cambios, mentalidad y presión ajustables, o resultado rápido.
+- Cancha animada: los jugadores con su número y los colores del club se mueven según quién tiene la pelota; se ven los pases, los remates y los goles.
+- Simulación minuto a minuto con relato, estadísticas, tarjetas, lesiones y penales. Clima de cada partido y sonidos (silbato, gol), que se pueden apagar.
+- Partido en vivo con pausa, 3 velocidades, 5 cambios, mentalidad y presión ajustables, o resultado rápido desde el botón Simular.
+- Clásicos (Superclásico, Fla-Flu, Gre-Nal, clásico uruguayo y más) con más público y más presión.
+- Avisos antes del partido: titulares cansados, fuera de puesto, lesionados o suspendidos.
 - Tácticas simples: 8 formaciones, 5 mentalidades y 3 niveles de presión.
 - Cansancio, moral, suspensiones por amarillas y rotación cuando hay dos partidos por semana.
 
@@ -29,6 +32,16 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 - Gastos: sueldos, staff, mantenimiento, obras, viajes y préstamos.
 - Préstamos bancarios con cuotas, tope salarial de la directiva, presupuesto de fichajes, evolución de la caja y balances por temporada.
 - Ampliación del estadio y mejoras de centro de entrenamiento, divisiones inferiores y departamento médico.
+
+**Mercado**
+- Ojeadores: el potencial de los jugadores de otros clubes queda oculto hasta que mandás a observarlos.
+- Préstamos: cedé jugadores para que sumen minutos o pedí a préstamo jugadores de otros clubes hasta fin de temporada.
+- Porcentaje de futura venta: al vender podés quedarte con el 20% de una próxima transferencia.
+- Comparar jugadores con los mejores de tu plantel en ese puesto.
+- Tope salarial negociable: arranca en la masa salarial actual, renovar sin subir el sueldo siempre está permitido, y podés pedirle a la directiva que lo amplíe (dos veces por temporada; depende de su confianza y de la caja).
+
+**Eventos con decisiones**
+- Conferencias de prensa, pedidos de aumento, jugadores que quieren irse, presión de la barra, semana de clásico, indisciplina, giras y campañas publicitarias, tratamientos médicos, reclamos de socios, inversores, joyas de inferiores, convocatorias a la selección y clubes que quieren llevarte en plena temporada.
 
 **Carrera larga**
 - Juveniles cada temporada, evolución y declive de jugadores, retiros, vencimiento y renovación de contratos.

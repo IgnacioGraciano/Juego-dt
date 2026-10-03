@@ -26,6 +26,17 @@ DT.Act = (function () {
         result = `Vendiste a ${p.n} por ${U.money(d.fee)}.`;
         break;
       }
+      case 'sellOn': {
+        const d = msg.data;
+        const p = G.players[d.pid];
+        if (!p || p.t !== me.id) { result = 'El jugador ya no está en el club.'; break; }
+        if (!DT.S.windowOpen()) { result = 'El libro de pases está cerrado.'; break; }
+        const fee = U.round(d.fee * 0.85, 10000);
+        DT.M.sellUser(d.pid, d.buyer, fee, d.buyerName);
+        p.sellOn = { tid: me.id, pct: 0.2 };
+        result = `Vendiste a ${p.n} por ${U.money(fee)} y te quedás con el 20% de una futura venta.`;
+        break;
+      }
       case 'counter': {
         const d = msg.data;
         const p = G.players[d.pid];
@@ -60,6 +71,9 @@ DT.Act = (function () {
       case 'stay':
         result = `Seguís en ${me.n}.`;
         G.manager.conf = Math.min(100, G.manager.conf + 5);
+        break;
+      case 'ev':
+        result = DT.Ev.apply(msg.data, act.i);
         break;
       default:
         result = 'Listo.';

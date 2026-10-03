@@ -61,7 +61,37 @@ DT.Board = (function () {
     M.pj++;
     if (res === 1) M.g++; else if (res === 0) M.p++; else M.e++;
     const exp = B.expected(match);
-    M.conf = U.clamp(M.conf + (res - exp) * 7, 0, 100);
+    const derby = DT.isDerby(match.h, match.a);
+    M.conf = U.clamp(M.conf + (res - exp) * 7 * (derby ? 1.6 : 1), 0, 100);
+    const opp = G.teams[match.h === me ? match.a : match.h];
+    G.lastResult = { res, derby, opp: opp.n, mine, theirs, w: G.week, y: G.year };
+    if (derby) {
+      // los clásicos pegan fuerte en el ánimo del plantel
+      const d = res === 1 ? 5 : res === 0 ? -5 : 0;
+      for (const pid of DT.userTeam().squad) { const p = G.players[pid]; p.mor = U.clamp(p.mor + d, 10, 100); }
+    }
+  };
+
+  // Pedido de ampliación del tope salarial.
+  B.askCapRaise = function () {
+    const G = DT.G;
+    const t = DT.userTeam();
+    const M = G.manager;
+    t.capAsks = t.capAsks || 0;
+    if (t.capAsks >= 2) return { ok: false, msg: 'La directiva ya escuchó dos pedidos esta temporada. Volvé a intentarlo el año que viene.' };
+    t.capAsks++;
+    const rev = DT.E.estimateRevenue(t);
+    if (t.cash < -rev * 0.1) return { ok: false, msg: 'Con la caja en rojo, la directiva rechaza subir el tope. Primero hay que vender o recortar.' };
+    if (M.conf >= 70 || (t.cash > rev * 0.4 && M.conf >= 45)) {
+      t.capBonus = (t.capBonus || 0) + 0.12;
+      return { ok: true, msg: `Aprobado: el tope sube 12% (${U.money(DT.E.wageCap(t))} anuales). La directiva confía en vos.` };
+    }
+    if (M.conf >= 40) {
+      t.capBonus = (t.capBonus || 0) + 0.06;
+      M.conf = Math.max(0, M.conf - 4);
+      return { ok: true, msg: `Aprobado a regañadientes: el tope sube 6% (${U.money(DT.E.wageCap(t))}), pero la directiva espera resultados.` };
+    }
+    return { ok: false, msg: 'Rechazado: la directiva no confía lo suficiente en tu gestión para gastar más en sueldos.' };
   };
 
   B.weekly = function () {

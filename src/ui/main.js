@@ -16,6 +16,10 @@ DT.Main = (function () {
   };
 
   Main.afterLoad = function () {
+    // partidas guardadas con versiones anteriores
+    const ut = DT.userTeam();
+    if (ut.capBase === undefined) DT.E.resetCap(ut);
+    if (DT.G.settings.speed === 8) DT.G.settings.speed = 4;
     UI.tab = 'home';
     UI.compSel = null;
     UI.compCountry = null;

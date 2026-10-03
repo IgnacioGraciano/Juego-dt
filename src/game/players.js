@@ -92,7 +92,27 @@ DT.P = (function () {
     return 1;
   };
 
-  P.available = (p) => p.inj <= 0 && p.sus <= 0;
+  P.available = (p) => p.inj <= 0 && p.sus <= 0 && !(p.nt > 0);
+
+  // Números de camiseta: se asignan al llegar al club.
+  const PREF = { P: [1, 12, 23, 25], D: [2, 3, 4, 6, 13, 14, 15, 16, 24], M: [5, 8, 10, 11, 20, 21, 22, 18], A: [9, 7, 11, 19, 17, 27, 29] };
+  P.ensureNumbers = function (team) {
+    const G = DT.G;
+    const used = new Set();
+    const need = [];
+    for (const pid of team.squad) {
+      const p = G.players[pid];
+      if (p.num && !used.has(p.num)) used.add(p.num);
+      else need.push(p);
+    }
+    need.sort((a, b) => b.ovr - a.ovr);
+    for (const p of need) {
+      let n = PREF[p.pos].find((x) => !used.has(x));
+      if (!n) { n = 2; while (used.has(n)) n++; }
+      p.num = n;
+      used.add(n);
+    }
+  };
 
   P.avgRating = (p) => (p.st.pj ? p.st.rs / p.st.pj : 0);
 
