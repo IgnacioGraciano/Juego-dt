@@ -123,13 +123,13 @@
     const G = DT.G;
     const t = G.teams[d.id];
     if (!t) return;
-    const ps = t.squad.map((id) => G.players[id]).sort((a, b) => 'PDMA'.indexOf(a.pos) - 'PDMA'.indexOf(b.pos) || b.ovr - a.ovr);
+    const ps = t.squad.map((id) => G.players[id]).sort(UI.byPos);
     const titles = (t.titles || []).slice(-8).reverse();
     UI.modal(`
       <div class="row">${UI.badge(t, 'xl')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${t.eur ? 'Europa' : `${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].name)} · ${t.lg ? U.esc(DT.COUNTRIES[t.cc].league) : 'Segunda división'}`}</div></div></div>
       ${t.eur ? '' : `<div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Socios</span><b>${U.num(t.socios)}</b></div><div><span>Estadio</span><b class="ellipsis" style="font-size:.95rem">${U.esc(t.stad)}</b></div><div><span>Capacidad</span><b>${U.num(t.cap)}</b></div><div><span>Formación</span><b>${t.tac.f}</b></div></div>`}
       ${titles.length ? `<div class="small">Títulos recientes: ${titles.map((x) => `${U.esc(x.c)} ${x.y}`).join(' · ')}</div>` : ''}
-      <div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`).join('')}</div>`);
+      <div class="list">${UI.grouped(ps, (p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`)}</div>`);
   };
 
   A.scout = (d) => {
@@ -255,6 +255,7 @@
     NEG.pid = p.id;
     NEG.fee = U.round(DT.P.value(p), stepFor(DT.P.value(p)));
     NEG.msg = '';
+    NEG.counter = null; // la contraoferta es de otra negociación
     renderBuy();
   };
   function renderBuy() {
@@ -298,6 +299,7 @@
     NEG.years = d.years;
     NEG.msg = msg || '';
     NEG.mode = 'sign';
+    NEG.counter = null;
     renderContract();
   }
   A.contractOpen = (d) => contractStep(+d.id, +d.fee || 0, 'Jugador libre: no hay que pagar transferencia.');
@@ -497,6 +499,10 @@
         <div class="small muted">Exportá la partida para pasarla a otro dispositivo o guardarla aparte.</div>
         <button class="btn block" data-a="exportSave">Exportar partida</button>
         <button class="btn block" data-a="importOpen">Importar partida</button>
+      </section>
+      <section class="card"><h3>Pantalla</h3>
+        <div class="small muted">El modo ordenador usa todo el ancho de la pantalla. Se recuerda en este dispositivo.</div>
+        ${UI.layoutSwitch()}
       </section>
       <section class="card"><h3>Partidos</h3>
         <span class="up">Velocidad del partido en vivo</span>

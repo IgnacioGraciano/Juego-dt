@@ -146,7 +146,9 @@ DT.Screens = (function () {
     const issues = DT.AI.lineupIssues(t);
     const toks = t.xi.map((pid, i) => {
       const p = G.players[pid];
-      const [x, y] = F.xy[i];
+      const [fx, fy] = F.xy[i];
+      // en modo ordenador la cancha es horizontal: el arco propio a la izquierda
+      const x = UI.desk ? 100 - fy : fx, y = UI.desk ? fx : fy;
       if (!p) return `<button class="tok ${UI.sel && UI.sel.type === 'xi' && UI.sel.i === i ? 'sel' : ''}" style="left:${x}%;top:${y}%" data-a="pickXI" data-i="${i}"><span class="c">?</span><span class="n">Vacío</span></button>`;
       const bad = !DT.P.available(p) || DT.AI.posFactor(p.pos, F.l[i]) < 1;
       return `<button class="tok ${UI.sel && UI.sel.type === 'xi' && UI.sel.i === i ? 'sel' : ''} ${bad ? 'bad' : ''}" style="left:${x}%;top:${y}%;--c:${t.c1}" data-a="pickXI" data-i="${i}" aria-label="${U.esc(p.n)}">
@@ -154,7 +156,8 @@ DT.Screens = (function () {
     }).join('');
     const inXI = new Set(t.xi);
     const bench = (t.bench || []).filter((id) => G.players[id] && !inXI.has(id));
-    const reserves = t.squad.filter((id) => !inXI.has(id) && !bench.includes(id)).map((id) => G.players[id]).sort((a, b) => 'PDMA'.indexOf(a.pos) - 'PDMA'.indexOf(b.pos) || b.ovr - a.ovr);
+    const reserves = t.squad.filter((id) => !inXI.has(id) && !bench.includes(id)).map((id) => G.players[id]).sort(UI.byPos);
+    const benchPs = bench.map((id) => G.players[id]).sort(UI.byPos);
     const row = (p, type) => `<div class="li ${UI.sel && UI.sel.pid === p.id ? 'sel' : ''}" data-a="pickRes" data-id="${p.id}" data-type="${type}">
       ${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años ${UI.status(p)}</div></div>${UI.fitBar(p.fit)}<span class="ovr">${p.ovr}</span></div>`;
     const prev = DT.Match.preview(t);
@@ -164,12 +167,12 @@ DT.Screens = (function () {
         <div class="grid3 small tab-nums" style="text-align:center"><div><span class="up">Ataque</span><br><b>${prev.att}</b></div><div><span class="up">Medio</span><br><b>${prev.mid}</b></div><div><span class="up">Defensa</span><br><b>${prev.def}</b></div></div>
         <label class="toggle small"><input type="checkbox" id="autoxi" data-c="autoXI" ${t.autoXI ? 'checked' : ''}> Elegir el once automáticamente antes de cada partido</label>
         ${issues.length ? `<div class="small" style="color:var(--loss)">${issues.map(U.esc).join(' ')}</div>` : ''}
-        <div class="pitch"><div class="lines"></div><div class="box top"></div><div class="box bot"></div>${toks}</div>
+        <div class="pitch ${UI.desk ? 'h' : ''}"><div class="lines"></div><div class="box top"></div><div class="box bot"></div>${toks}</div>
         <div class="small muted">Tocá un jugador y después otro (en la cancha, el banco o los suplentes) para intercambiarlos. En rojo: lesionado, suspendido o fuera de su puesto.</div>
         <button class="btn block" data-a="autoXI">Armar el mejor once</button>
       </section>
-      <section class="card"><h3>Banco de suplentes</h3><div class="list">${bench.map((id) => row(G.players[id], 'bench')).join('') || '<div class="empty small">Sin suplentes.</div>'}</div></section>
-      <section class="card"><h3>Resto del plantel</h3><div class="list">${reserves.map((p) => row(p, 'res')).join('') || '<div class="empty small">No hay más jugadores.</div>'}</div></section>`;
+      <section class="card"><h3>Banco de suplentes</h3><div class="list">${UI.grouped(benchPs, (p) => row(p, 'bench')) || '<div class="empty small">Sin suplentes.</div>'}</div></section>
+      <section class="card"><h3>Resto del plantel</h3><div class="list">${UI.grouped(reserves, (p) => row(p, 'res')) || '<div class="empty small">No hay más jugadores.</div>'}</div></section>`;
   };
 
   function manualEdit(t) {
@@ -265,7 +268,7 @@ DT.Screens = (function () {
     const sort = UI.sub.squadSort || 'pos';
     const ps = t.squad.map((id) => G.players[id]);
     const sorters = {
-      pos: (a, b) => 'PDMA'.indexOf(a.pos) - 'PDMA'.indexOf(b.pos) || b.ovr - a.ovr,
+      pos: UI.byPos,
       ovr: (a, b) => b.ovr - a.ovr,
       age: (a, b) => a.age - b.age,
       val: (a, b) => DT.P.value(b) - DT.P.value(a),
@@ -274,6 +277,9 @@ DT.Screens = (function () {
       g: (a, b) => b.st.g - a.st.g,
     };
     ps.sort(sorters[sort]);
+    const rowOf = (p) => `<div class="li" data-a="player" data-id="${p.id}">
+        ${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(p.w)}/año · ${p.cy} ${p.cy === 1 ? 'año' : 'años'} ${sort === 'g' ? `· ${p.st.g} goles` : ''} ${UI.status(p)}</div></div>
+        <div class="stack" style="gap:3px;align-items:flex-end">${UI.stars(p.pot)}${UI.fitBar(p.fit)}</div><span class="ovr">${p.ovr}</span></div>`;
     const payroll = DT.E.payroll(t), cap = DT.E.wageCap(t);
     return `
       <section class="card">
@@ -282,9 +288,7 @@ DT.Screens = (function () {
         <div class="bar ${payroll > cap ? 'bad' : payroll > cap * 0.9 ? 'warn' : ''}"><i style="width:${Math.min(100, (payroll / cap) * 100)}%"></i></div>
         <div class="chips">${[['pos', 'Puesto'], ['ovr', 'Media'], ['age', 'Edad'], ['val', 'Valor'], ['w', 'Sueldo'], ['cy', 'Contrato'], ['g', 'Goles']].map(([k, l]) => `<button class="chip ${sort === k ? 'on' : ''}" data-a="squadSort" data-v="${k}">${l}</button>`).join('')}</div>
       </section>
-      <section class="card"><div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">
-        ${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(p.w)}/año · ${p.cy} ${p.cy === 1 ? 'año' : 'años'} ${sort === 'g' ? `· ${p.st.g} goles` : ''} ${UI.status(p)}</div></div>
-        <div class="stack" style="gap:3px;align-items:flex-end">${UI.stars(p.pot)}${UI.fitBar(p.fit)}</div><span class="ovr">${p.ovr}</span></div>`).join('')}</div></section>`;
+      <section class="card"><div class="list">${sort === 'pos' ? UI.grouped(ps, rowOf) : ps.map(rowOf).join('')}</div></section>`;
   };
   A.squadSort = (d) => { UI.sub.squadSort = d.v; UI.render(); };
 

@@ -4,7 +4,8 @@ DT.MatchUI = (function () {
   const UI = DT.UI;
   const A = UI.A;
   const MU = {};
-  const SPEEDS = [[1, 'Lento', 700], [2, 'Normal', 360], [4, 'Rápido', 140]];
+  // velocidad: valor guardado, nombre y milisegundos por minuto de juego
+  const SPEEDS = [[1, 'Lento', 1700], [2, 'Normal', 950], [4, 'Rápido', 380]];
   const tickFor = (v) => (SPEEDS.find((s) => s[0] === v) || SPEEDS[2])[2];
   let sim = null, match = null, timer = null, side = 0, selOut = null, seen = 0, pitch = null, tab = 'feed', showLineups = false, started = false;
 
@@ -21,6 +22,7 @@ DT.MatchUI = (function () {
     el.innerHTML = '';
   }
   const $ = (id) => document.getElementById(id);
+  window.addEventListener('resize', () => { if (pitch) pitch.resize(); });
 
   function oppPreview(team, opp, home) {
     const xi = DT.AI.pickXI(team);
@@ -103,7 +105,7 @@ DT.MatchUI = (function () {
   // ---------- en vivo ----------
   A.mLive = () => {
     sim = DT.Match.create(match);
-    sim.autoSubs = false;
+    sim.autoSubs = true; // activados por defecto; se pueden apagar en Cambios y táctica
     selOut = null;
     seen = 0;
     tab = 'feed';
@@ -125,6 +127,8 @@ DT.MatchUI = (function () {
   }
   function tick() {
     if (!sim) return stop();
+    // durante el festejo de un gol el reloj espera a que se reacomoden para el saque
+    if (pitch && pitch.holding()) return;
     const half = sim.half;
     DT.Match.step(sim);
     if (sim.done) {
@@ -143,6 +147,8 @@ DT.MatchUI = (function () {
       stop();
       tab = 'subs';
     }
+    // con la cancha a la vista, el gol se anota en el marcador cuando la pelota entra
+    if (pitch && sim.last && sim.last.shot && sim.last.shot.goal) return;
     updateLive();
   }
 
@@ -210,11 +216,14 @@ DT.MatchUI = (function () {
   function subsPanel() {
     const G = DT.G;
     const s = sim.s[side];
-    const on = s.on.map((x) => {
+    const slotOrder = (x) => 'PDMA'.indexOf(x.slot);
+    const onList = s.on.slice().sort((a, b) => slotOrder(a) - slotOrder(b));
+    const on = UI.grouped(onList, (x) => {
       const p = G.players[x.id];
       return `<div class="li ${selOut === x.id ? 'sel' : ''}" data-a="mSelOut" data-id="${x.id}"><span class="pos ${x.slot}">${U.posName[x.slot]}</span><div class="name">${p.num ? `<span class="muted tab-nums">${p.num}</span> ` : ''}${U.esc(p.n)}${p.inj > 0 ? ' <span class="pill bad">Lesionado</span>' : ''}${s.cards && s.cards[x.id] ? ' <span class="pill warn">Amonestado</span>' : ''}<div class="sub">Nota ${(s.rating[x.id] || 6).toFixed(1)}</div></div>${UI.fitBar(p.fit)}<span class="ovr">${p.ovr}</span></div>`;
-    }).join('');
-    const bench = s.bench.map((id) => G.players[id]).filter(Boolean).map((p) => `<div class="li" data-a="mSelIn" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}</div>${UI.fitBar(p.fit)}<span class="ovr">${p.ovr}</span></div>`).join('');
+    }, (x) => x.slot);
+    const benchPs = s.bench.map((id) => G.players[id]).filter(Boolean).sort(UI.byPos);
+    const bench = UI.grouped(benchPs, (p) => `<div class="li" data-a="mSelIn" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}</div>${UI.fitBar(p.fit)}<span class="ovr">${p.ovr}</span></div>`);
     return `<div class="row between"><h3>Cambios</h3><span class="pill">${5 - s.subs} disponibles</span></div>
       <div class="small muted">${selOut ? 'Ahora tocá el suplente que entra.' : 'Tocá el jugador que sale y después el que entra. Conviene pausar antes.'}</div>
       <div class="list">${on}</div>
@@ -234,17 +243,20 @@ DT.MatchUI = (function () {
     return `<div class="seg" id="mtabs">${[['feed', 'Relato'], ['stats', 'Estadísticas'], ['subs', 'Cambios y táctica']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-a="mTab" data-v="${k}">${l}</button>`).join('')}</div>`;
   }
   function renderLive() {
-    show(`<span class="kicker">${U.esc(DT.S.matchLabel(match))}${sim.derby ? ` · ${U.esc(sim.derby)}` : ''}</span>
+    show(`<div class="live"><div class="live-main">
+      <span class="kicker">${U.esc(DT.S.matchLabel(match))}${sim.derby ? ` · ${U.esc(sim.derby)}` : ''}</span>
       ${header()}
       <div class="pitchwrap"><canvas id="pitchcv" aria-label="Cancha con la posición de los jugadores y la pelota"></canvas></div>
       <div id="ctl">${controls()}</div>
       <div id="note">${note()}</div>
+      </div><div class="live-side">
       <div id="lineups">${lineups()}</div>
       <div id="tabswrap">${tabs()}</div>
       <section class="card" id="mtab">${tabBody()}</section>
-      <button class="btn block" data-a="mEnd">Ir al final</button>`);
+      <button class="btn block" data-a="mEnd">Ir al final</button>
+      </div></div>`);
     if (pitch) pitch.stop();
-    pitch = DT.Pitch($('pitchcv'), sim);
+    pitch = DT.Pitch($('pitchcv'), sim, { onGoal: () => updateLive() });
     pitch.setTick(tickFor(DT.G.settings.speed));
     pitch.start();
   }
@@ -329,20 +341,27 @@ DT.MatchUI = (function () {
     if (tie && tie.winner && !sim.pens) res += tie.winner === G.user ? ' · ¡Avanzás de ronda!' : (tie.single || match.leg === 2 ? ' · Eliminado' : '');
     const scorers = (sim.scorers || []).map((x) => `<div class="small">${x.m}' ${U.esc(G.players[x.pid] ? G.players[x.pid].n : '')} <span class="muted">(${U.esc(G.teams[sim.s[x.side].tid].s)})</span></div>`).join('');
     const pens = sim.pens ? `<div class="small"><b>Penales ${sim.pens[0]}-${sim.pens[1]}</b>: ${sim.pensLog.map((k) => `${k.ok ? '✓' : '✗'} ${U.esc(k.n.split(' ').slice(-1)[0])}`).join(', ')}</div>` : '';
-    const ratings = [...s.played].map((pid) => ({ p: G.players[pid], r: s.rating[pid] || 6 })).filter((x) => x.p).sort((x, y) => y.r - x.r);
+    const ratings = [...s.played].map((pid) => ({ p: G.players[pid], r: s.rating[pid] || 6 })).filter((x) => x.p).sort((x, y) => 'PDMA'.indexOf(x.p.pos) - 'PDMA'.indexOf(y.p.pos) || y.r - x.r);
     const others = DT.S.slotMatches(slotW, slotS).filter((m) => m.c === match.c && m.i !== match.i && m.p).slice(0, 15);
     const mvp = match.mvp && G.players[match.mvp];
     show(`<span class="kicker">${U.esc(DT.S.matchLabel(match))}</span>
       <div class="scoreboard"><div class="t">${UI.badge(h, 'l')}<b>${U.esc(h.s)}</b></div><div><div class="sc tab-nums">${sim.s[0].goals} - ${sim.s[1].goals}</div><div class="min">Final</div></div><div class="t">${UI.badge(a, 'l')}<b>${U.esc(a.s)}</b></div></div>
       <h2 style="text-align:center;color:${res.startsWith('Victoria') || res.startsWith('Clasificado') ? 'var(--win)' : res.startsWith('Derrota') || res.startsWith('Eliminado') ? 'var(--loss)' : 'var(--ink)'}">${res}</h2>
       <section class="card">${scorers || '<div class="small muted">Sin goles.</div>'}${pens}${mvp ? `<div class="small">Figura: <b>${U.esc(mvp.n)}</b></div>` : ''}${match.att ? `<div class="small muted">Público: ${U.num(match.att)}${match.h === G.user && !match.n ? ` · recaudación ${U.money(match.att * h.ticket * 0.65)}` : ''}</div>` : ''}</section>
-      <section class="card"><h3>Notas de tu equipo</h3><div class="list">${ratings.map((x) => `<div class="li" data-a="player" data-id="${x.p.id}">${UI.pos(x.p)}<div class="name">${U.esc(x.p.n)}</div>${UI.fitBar(x.p.fit)}<span class="ovr" style="color:${x.r >= 7.5 ? 'var(--win)' : x.r < 5.5 ? 'var(--loss)' : 'inherit'}">${x.r.toFixed(1)}</span></div>`).join('')}</div></section>
-      ${others.length ? `<section class="card"><h3>Otros resultados</h3><div class="list">${others.map(DT.Screens.resultRow).join('')}</div></section>` : ''}
+      <section class="card"><h3>Notas de tu equipo</h3><div class="list">${UI.grouped(ratings, (x) => `<div class="li" data-a="player" data-id="${x.p.id}">${UI.pos(x.p)}<div class="name">${U.esc(x.p.n)}</div>${UI.fitBar(x.p.fit)}<span class="ovr" style="color:${x.r >= 7.5 ? 'var(--win)' : x.r < 5.5 ? 'var(--loss)' : 'inherit'}">${x.r.toFixed(1)}</span></div>`, (x) => x.p.pos)}</div></section>
+      ${others.length ? `<div class="others"><button class="linkbtn" data-a="mOthers" aria-expanded="false">Otros resultados (${others.length}) ▾</button><section class="card" id="others" hidden><div class="list">${others.map(DT.Screens.resultRow).join('')}</div></section></div>` : ''}
       <button class="btn primary block big" data-a="mDone">Continuar</button>`);
     ov().scrollTop = 0;
     sim = null;
     DT.Main.autosave();
   }
+  A.mOthers = (d, el) => {
+    const box = $('others');
+    if (!box) return;
+    box.hidden = !box.hidden;
+    el.setAttribute('aria-expanded', String(!box.hidden));
+    el.textContent = el.textContent.replace(/[▾▴]/, box.hidden ? '▾' : '▴');
+  };
   A.mDone = () => {
     hide();
     UI.render();

@@ -2,6 +2,8 @@
 
 Juego de manager de fútbol para el celular. Sos el DT de un club de cualquiera de las 10 ligas de Sudamérica y tomás las decisiones: once, táctica, mercado de pases, finanzas, estadio e infraestructura. La dificultad está pensada entre *El Camino DT* y *Footy Owner 2*: tácticas simples, partidos rápidos de seguir y un sistema económico con peso.
 
+Tiene dos modos de pantalla que se eligen desde el inicio (o en **Club → Partida**): **celular**, en una columna, y **ordenador**, que usa todo el ancho con pestañas arriba, tarjetas en columnas, cancha horizontal y el partido en vivo con la cancha grande al lado del relato.
+
 No necesita instalación: es un único archivo `index.html` que funciona en cualquier navegador (también sin conexión, salvo las tipografías).
 
 ## Cómo jugar
@@ -19,7 +21,7 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 - Clasificación real a las copas según la posición en la liga y el campeón de la copa nacional.
 
 **Partidos**
-- Cancha animada: los jugadores con su número y los colores del club se mueven según quién tiene la pelota; se ven los pases, los remates y los goles.
+- Partido en la cancha: cada minuto simulado se ve como una jugada. El equipo con la pelota avanza con pases (con su estela) y conducciones, el rival presiona y corta pases, y los remates terminan en gol, atajada o afuera. En los goles la pelota entra al arco, el marcador cambia en ese momento y el goleador festeja antes del saque del medio.
 - Simulación minuto a minuto con relato, estadísticas, tarjetas, lesiones y penales. Clima de cada partido y sonidos (silbato, gol), que se pueden apagar.
 - Partido en vivo con pausa, 3 velocidades, 5 cambios, mentalidad y presión ajustables, o resultado rápido desde el botón Simular.
 - Clásicos (Superclásico, Fla-Flu, Gre-Nal, clásico uruguayo y más) con más público y más presión.

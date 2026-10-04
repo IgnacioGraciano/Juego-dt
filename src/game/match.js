@@ -207,6 +207,7 @@ DT.Match = (function () {
           sim.s[att].goals++;
           sim.last.shot.goal = true;
           const asId = U.chance(0.75) ? pickWeighted(sim, att, { M: 3, A: 2, D: 1, P: 0.05 }, shooterId) : null;
+          sim.last.shot.aid = asId;
           const as = asId ? G.players[asId] : null;
           sim.s[att].rating[shooterId] = (sim.s[att].rating[shooterId] || 6) + 1.1;
           if (asId) sim.s[att].rating[asId] = (sim.s[att].rating[asId] || 6) + 0.6;

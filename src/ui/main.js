@@ -49,6 +49,7 @@ DT.Main = (function () {
           <svg class="trophy" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true"><path d="M20 8h24v14a12 12 0 0 1-24 0z"/><path d="M20 12h-8a8 8 0 0 0 10 12M44 12h8a8 8 0 0 1-10 12"/><path d="M32 34v10M24 56h16M26 44h12v12H26z"/></svg>
           <h1>DT <span>Sudamericano</span></h1>
           <div class="muted">Dirigí a tu club en las 10 ligas de Sudamérica, la Libertadores y la Sudamericana.</div>
+          ${UI.layoutSwitch()}
         </div>
         ${meta ? `<section class="card"><span class="up">Partida guardada</span><div><b>${U.esc(meta.team)}</b> · ${U.esc(meta.mgr)} · temporada ${meta.year}, semana ${meta.week}</div><button class="btn primary block big" data-a="loadLocal">Continuar partida</button></section>` : ''}
         ${cloudMeta && (!meta || cloudMeta.at > meta.at) ? `<section class="card"><span class="up">En tu cuenta</span><div><b>${U.esc(cloudMeta.team)}</b> · temporada ${cloudMeta.year}, semana ${cloudMeta.week}</div><button class="btn block" data-a="loadCloud">Cargar desde la nube</button></section>` : ''}
@@ -74,6 +75,11 @@ DT.Main = (function () {
         return `<div class="li" data-a="stPick" data-code="${r.code}">${UI.badge({ c1: r.c1, c2: r.c2, s: r.s })}<div class="name">${U.esc(r.n)}<div class="sub">${U.esc(r.stad)} · ${U.num(r.cap)}</div></div><span class="pill ${cls}">${lbl}</span></div>`;
       }).join('')}</div></section>`;
   }
+  // vuelve a dibujar la pantalla inicial (al cambiar entre modo celular y ordenador)
+  Main.refreshStart = async function () {
+    if (start.step === 1) renderStart(DT.Save.localMeta(), DT.Save.cloud.ready ? await DT.Save.cloudMeta() : null);
+    else renderStart();
+  };
   A.stCountry = (d) => {
     start.name = (document.getElementById('mgrname') || {}).value || start.name;
     start.cc = d.cc;
@@ -187,6 +193,7 @@ DT.Main = (function () {
 
   // ---------- arranque ----------
   Main.boot = async function (hotData) {
+    UI.loadLayout();
     UI.bind();
     // capacidades opcionales del visor (nube y descargas)
     const capInit = (async () => {
