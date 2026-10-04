@@ -50,6 +50,20 @@ DT.UI = (function () {
     if (p.cy <= 1 && p.t && DT.isUser(p.t)) s += '<span class="pill warn">Último año</span>';
     return s;
   };
+  // Orden por grupos (arqueros, defensores, medios, delanteros) y, dentro de cada grupo, por media.
+  UI.byPos = (a, b) => 'PDMA'.indexOf(a.pos) - 'PDMA'.indexOf(b.pos) || b.ovr - a.ovr;
+  UI.GROUPS = { P: 'Arqueros', D: 'Defensores', M: 'Mediocampistas', A: 'Delanteros' };
+  // Lista con un título por grupo. `items` ya viene ordenada; `posOf` devuelve el puesto de cada item.
+  UI.grouped = function (items, row, posOf) {
+    posOf = posOf || ((x) => x.pos);
+    let cur = null;
+    return items.map((x) => {
+      const g = posOf(x);
+      const head = g !== cur ? `<div class="grp">${UI.GROUPS[g] || ''}</div>` : '';
+      cur = g;
+      return head + row(x);
+    }).join('');
+  };
   UI.formChips = (form) => form.slice(-5).map((r) => `<span class="res ${r}">${r}</span>`).join('');
   UI.dateLabel = () => {
     const G = DT.G;
@@ -76,16 +90,41 @@ DT.UI = (function () {
   };
   UI.A.closeModal = () => UI.closeModal();
 
+  // ---------- modo celular / ordenador ----------
+  // Se guarda en el dispositivo (no en la partida). Sin preferencia guardada, pantallas anchas arrancan en modo ordenador.
+  UI.desk = false;
+  UI.setDesk = function (on, save) {
+    UI.desk = !!on;
+    document.documentElement.classList.toggle('desk', UI.desk);
+    if (save) { try { localStorage.setItem('dt-layout', UI.desk ? 'pc' : 'cel'); } catch (e) { /* sin almacenamiento */ } }
+  };
+  UI.loadLayout = function () {
+    let v = null;
+    try { v = localStorage.getItem('dt-layout'); } catch (e) { /* sin almacenamiento */ }
+    UI.setDesk(v ? v === 'pc' : window.innerWidth >= 1100);
+  };
+  UI.layoutSwitch = () => `<div class="seg layout-sw" role="group" aria-label="Modo de pantalla">
+    <button class="${UI.desk ? '' : 'on'}" data-a="setLayout" data-v="cel" aria-pressed="${!UI.desk}">📱 Modo celular</button>
+    <button class="${UI.desk ? 'on' : ''}" data-a="setLayout" data-v="pc" aria-pressed="${UI.desk}">🖥 Modo ordenador</button></div>`;
+  UI.A.setLayout = (d) => {
+    UI.setDesk(d.v === 'pc', true);
+    if (DT.G) UI.render();
+    else DT.Main.refreshStart();
+  };
+
   // ---------- estructura ----------
   UI.renderTop = function () {
     const G = DT.G;
     const t = DT.userTeam();
     const pend = G.inbox.filter((m) => m.actions && !m.done).length;
-    $('#top').innerHTML = `${UI.badge(t)}<div class="club"><b>${U.esc(t.n)}</b><span class="small muted">${UI.dateLabel()}${DT.S.windowOpen() ? ' · <span style="color:var(--accent);font-weight:600">Pases abiertos</span>' : ''}</span></div><div class="cash"><span class="up" style="display:block">Caja</span><span style="color:${t.cash < 0 ? 'var(--loss)' : 'inherit'}">${U.money(t.cash)}</span></div>`;
     const tabs = [['home', 'Inicio'], ['squad', 'Plantel'], ['comp', 'Torneos'], ['market', 'Mercado'], ['club', 'Club']];
+    const tabBtns = tabs.map(([k, l]) => `<button class="${UI.tab === k ? 'on' : ''}" data-a="tab" data-tab="${k}" aria-label="${l}">${UI.icon(k)}${l}${k === 'home' && pend ? '<span class="dot"></span>' : ''}</button>`).join('');
+    // en modo ordenador las pestañas van arriba, dentro de la barra del club
+    const top = UI.desk ? `<nav class="toptabs">${tabBtns}</nav>` : '';
+    $('#top').innerHTML = `${UI.badge(t)}<div class="club"><b>${U.esc(t.n)}</b><span class="small muted">${UI.dateLabel()}${DT.S.windowOpen() ? ' · <span style="color:var(--accent);font-weight:600">Pases abiertos</span>' : ''}</span></div>${top}<div class="cash"><span class="up" style="display:block">Caja</span><span style="color:${t.cash < 0 ? 'var(--loss)' : 'inherit'}">${U.money(t.cash)}</span></div>`;
     const nav = $('#tabs');
-    nav.hidden = false;
-    nav.innerHTML = `<div class="inner">${tabs.map(([k, l]) => `<button class="${UI.tab === k ? 'on' : ''}" data-a="tab" data-tab="${k}" aria-label="${l}">${UI.icon(k)}${l}${k === 'home' && pend ? '<span class="dot"></span>' : ''}</button>`).join('')}</div>`;
+    nav.hidden = UI.desk;
+    nav.innerHTML = UI.desk ? '' : `<div class="inner">${tabBtns}</div>`;
   };
 
   UI.renderCTA = function () {

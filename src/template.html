@@ -3,7 +3,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: columna única de celular (máx. 560px), barra superior del club, contenido, botón Continuar fijo y pestañas abajo. */
+/* Layout: columna única de celular (máx. 560px), barra superior del club, contenido, botón Continuar fijo y pestañas abajo.
+   Con html.desk (modo ordenador) usa todo el ancho: pestañas arriba y tarjetas en columnas. */
 :root {
   --bg: #eef0ea;
   --surface: #ffffff;
@@ -238,6 +239,56 @@ textarea { width: 100%; min-height: 90px; border-radius: 8px; border: 1px solid 
 label.toggle { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
 label.toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
 .empty { text-align: center; color: var(--muted); padding: 18px 8px; }
+.grp { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; color: var(--accent); padding: 12px 2px 4px; border-bottom: 1px solid var(--line); }
+.grp:first-child { padding-top: 2px; }
+.others { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.others .card { align-self: stretch; }
+.linkbtn { border: 0; background: none; padding: 4px 8px; font-size: 0.8rem; font-weight: 600; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.live, .live-main, .live-side { display: contents; }
+.layout-sw { width: 100%; max-width: 320px; }
+/* Cancha horizontal (modo ordenador) */
+.pitch.h { aspect-ratio: 92 / 68; max-width: 660px; background: repeating-linear-gradient(90deg, var(--pitch-a) 0 10%, var(--pitch-b) 10% 20%); }
+.pitch.h .lines::before { left: 50%; right: auto; top: 0; bottom: 0; border-top: 0; border-left: 2px solid var(--pitch-line); }
+.pitch.h .box { top: 25%; height: 50%; width: 14%; }
+.pitch.h .box.top { left: 4%; border: 2px solid var(--pitch-line); border-left: 0; }
+.pitch.h .box.bot { left: auto; right: 4%; bottom: auto; border: 2px solid var(--pitch-line); border-right: 0; }
+
+/* ===== Modo ordenador: todo el ancho de la pantalla, contenido en columnas ===== */
+html.desk body { font-size: 15.5px; }
+html.desk #app { max-width: 1480px; }
+html.desk #top { padding-inline: 24px; gap: 16px; }
+html.desk #top .club { flex: 0 1 340px; }
+html.desk #tabs { display: none; }
+.toptabs { display: none; }
+html.desk .toptabs { display: flex; flex: 1; justify-content: center; gap: 4px; }
+.toptabs button { border: 0; background: none; display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px; font-weight: 600; color: var(--muted); cursor: pointer; position: relative; }
+.toptabs button svg { width: 20px; height: 20px; }
+.toptabs button:hover { background: var(--surface-2); color: var(--ink); }
+.toptabs button.on { background: var(--accent-soft); color: var(--accent); }
+.toptabs button .dot { position: absolute; top: 6px; left: 26px; width: 8px; height: 8px; border-radius: 50%; background: var(--loss); }
+html.desk #main { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); grid-auto-flow: row dense; align-items: start; gap: 16px; padding-block: 18px 110px; padding-inline: 24px; }
+html.desk #main > :not(.card) { grid-column: 1 / -1; }
+html.desk #main > .card:has(table), html.desk #main > .card:has(.list > :nth-child(14)) { grid-column: 1 / -1; }
+html.desk #main > .card .list:has(> :nth-child(14)) { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); column-gap: 28px; }
+html.desk .list > .grp { grid-column: 1 / -1; }
+html.desk #main > .card:has(.pitch) { grid-column: span 2; }
+html.desk #main > .empty { grid-column: 1 / -1; }
+html.desk #main > .hero { padding-block: 26px 4px; }
+html.desk #cta { left: auto; right: max(24px, calc((100vw - 1480px) / 2 + 24px)); bottom: 22px; width: 400px; }
+html.desk #cta .inner { padding: 0; }
+html.desk #toast { bottom: 100px; }
+html.desk #modal { align-items: center; }
+html.desk #modal .sheet { max-width: 780px; max-height: 88vh; border-radius: 16px; padding-block: 20px 24px; padding-inline: 24px; }
+html.desk #modal .sheet .list:has(> .li:nth-child(9)) { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+html.desk #overlay .wrap { max-width: 980px; padding-inline: 24px; }
+html.desk #overlay .wrap:has(.live) { max-width: 1480px; }
+html.desk .live { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(360px, 1fr); gap: 20px; align-items: start; }
+html.desk .live-main, html.desk .live-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+html.desk .live-side { position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow-y: auto; padding-right: 2px; }
+html.desk .live .mhead .mt b { font-size: 1.15rem; }
+html.desk .live .mhead .sc { font-size: 2.6rem; }
+html.desk .matchup .t b { font-size: 1.3rem; }
+html.desk .layout-sw { max-width: 360px; }
 @media (prefers-reduced-motion: no-preference) {
   .ev.new { animation: evin 0.35s ease-out; }
   @keyframes evin { from { background: var(--gold-soft); } to { background: transparent; } }
