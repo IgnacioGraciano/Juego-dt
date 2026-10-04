@@ -8,6 +8,7 @@ module.exports = {
     'src/data/teams_bra.js',
     'src/data/teams_rest.js',
     'src/data/teams_div2.js',
+    'src/data/crests.js',
     'src/game/players.js',
     'src/game/economy.js',
     'src/game/ai.js',
