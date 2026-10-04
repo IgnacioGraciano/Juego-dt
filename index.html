@@ -125,6 +125,21 @@ h3 { font-size: 1.1rem; }
 .badge.l { width: 56px; height: 62px; font-size: 1.05rem; padding-bottom: 10px; }
 .badge.xl { width: 72px; height: 80px; font-size: 1.3rem; padding-bottom: 12px; }
 .badge-wrap { filter: drop-shadow(0 0 0.6px var(--muted)); display: inline-flex; }
+/* Escudos reales: si la imagen no carga se muestra el escudo dibujado */
+.crest-wrap { filter: none; width: 34px; height: 38px; flex: none; align-items: center; justify-content: center; }
+.crest-wrap.s { width: 22px; height: 25px; } .crest-wrap.l { width: 56px; height: 62px; } .crest-wrap.xl { width: 72px; height: 80px; }
+.crest-wrap .crest { width: 100%; height: 100%; object-fit: contain; display: block; }
+.crest-wrap > .badge { display: none; }
+.crest-wrap.nocrest { filter: drop-shadow(0 0 0.6px var(--muted)); }
+.crest-wrap.nocrest > .crest { display: none; }
+.crest-wrap.nocrest > .badge { display: inline-grid; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); } }
+:root[data-theme="dark"] .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); }
+.diffpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.diffpick button { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.diffpick button b { font-family: var(--display); font-size: 1.1rem; }
+.diffpick button span { font-size: 0.78rem; color: var(--muted); }
+.diffpick button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
 .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
 .pill.ok { color: var(--win); border-color: currentColor; background: transparent; }
@@ -381,6 +396,10 @@ DT.team = (id) => DT.G.teams[id];
 DT.player = (id) => DT.G.players[id];
 DT.userTeam = () => DT.G.teams[DT.G.user];
 DT.isUser = (tid) => DT.G && DT.G.user === tid;
+// División de un club: 'L_ARG' (primera), 'B_ARG' (segunda) o null (sin liga profesional).
+DT.divOf = (t) => (t.lg ? 'L_' + t.lg : t.d2 ? 'B_' + t.d2 : null);
+DT.inLeague = (t) => !!(t.lg || t.d2);
+DT.divName = (t) => (t.lg ? DT.COUNTRIES[t.cc].league : t.d2 ? DT.COUNTRIES[t.cc].div2.name : 'Sin liga profesional');
 
 // Noticias e inbox.
 DT.news = function (text, kind) {
@@ -408,25 +427,29 @@ DT.inbox = function (msg) {
 // Valores monetarios en millones de USD salvo que se indique.
 DT.COUNTRIES = {
   ARG: { name: 'Argentina', flag: '🇦🇷', league: 'Liga Profesional', cup: 'Copa Argentina', tv: 6, ticket: 12, socio: 8, smult: 1.0, wealth: 0.55, lib: 6, sud: 6, rel: 2, cupPrize: 1.2, leaguePrize: 1.5, format: 1,
-    pool: [['GIM', 'Gimnasia de Mendoza', 'GMZ', 'Víctor Legrotaglie', 11500, 62, '#0b2e6b', '#ffffff'], ['ERC', 'Estudiantes de Río Cuarto', 'ERC', 'Antonio Candini', 10000, 58, '#0d47a1', '#ffffff'], ['COL', 'Colón', 'COL', 'Brigadier López', 40000, 68, '#d50000', '#111111'], ['QUI', 'Quilmes', 'QUI', 'Centenario', 30200, 62, '#ffffff', '#0d47a1'], ['CHA', 'Chacarita Juniors', 'CHA', 'Chacarita Juniors', 19000, 60, '#d50000', '#111111'], ['FER', 'Ferro Carril Oeste', 'FER', 'Arq. Ricardo Etcheverri', 24400, 60, '#1b7a2f', '#ffffff'], ['ARS', 'Arsenal de Sarandí', 'ARS', 'Julio H. Grondona', 16300, 60, '#5fa8e8', '#c62828'], ['ATL', 'Atlanta', 'ATL', 'Don León Kolbowski', 14500, 57, '#ffd400', '#0d47a1']] },
+    div2: { name: 'Primera Nacional', format: 1 },
+    pool: [] },
   BRA: { name: 'Brasil', flag: '🇧🇷', league: 'Brasileirão Série A', cup: 'Copa do Brasil', tv: 20, ticket: 18, socio: 15, smult: 0.35, wealth: 1.0, lib: 6, sud: 6, rel: 4, cupPrize: 14, leaguePrize: 9, format: 2,
-    pool: [['CFC', 'Coritiba', 'CFC', 'Couto Pereira', 40500, 70, '#0a6b3a', '#ffffff'], ['CAP', 'Athletico Paranaense', 'CAP', 'Ligga Arena', 42370, 76, '#c8102e', '#111111'], ['CHP', 'Chapecoense', 'CHA', 'Arena Condá', 20000, 66, '#0b8a3e', '#ffffff'], ['REM', 'Remo', 'REM', 'Baenão', 17500, 64, '#0b1f5c', '#ffffff'], ['GOI', 'Goiás', 'GOI', 'Serrinha', 14450, 68, '#0b6b2e', '#ffffff'], ['NOV', 'Novorizontino', 'NOV', 'Jorjão', 16000, 64, '#ffd400', '#111111'], ['CUI', 'Cuiabá', 'CUI', 'Arena Pantanal', 44000, 66, '#0b6b2e', '#ffd400'], ['AMG', 'América Mineiro', 'AME', 'Independência', 23000, 68, '#0b8a3e', '#111111']] },
+    div2: { name: 'Brasileirão Série B', format: 2 },
+    pool: [] },
   URU: { name: 'Uruguay', flag: '🇺🇾', league: 'Primera División', cup: 'Copa AUF Uruguay', tv: 2.2, ticket: 9, socio: 10, smult: 0.6, wealth: 0.35, lib: 3, sud: 3, rel: 2, cupPrize: 0.4, leaguePrize: 0.5, format: 2,
-    pool: [['REN', 'Rentistas', 'REN', 'Complejo Rentistas', 10600, 54, '#ffffff', '#c62828'], ['FEN', 'Fénix', 'FEN', 'Parque Capurro', 5500, 55, '#5e35b1', '#ffffff'], ['RAM', 'Rampla Juniors', 'RAM', 'Olímpico', 6000, 55, '#c62828', '#1b7a2f'], ['CES', 'Central Español', 'CES', 'Parque Palermo', 6500, 54, '#c62828', '#0d47a1'], ['TAC', 'Tacuarembó', 'TAC', 'Raúl Goyenola', 7000, 52, '#c62828', '#111111']] },
+    div2: { name: 'Segunda División', format: 2 },
+    pool: [] },
   CHI: { name: 'Chile', flag: '🇨🇱', league: 'Primera División', cup: 'Copa Chile', tv: 4.5, ticket: 14, socio: 12, smult: 0.4, wealth: 0.35, lib: 3, sud: 3, rel: 2, cupPrize: 0.5, leaguePrize: 0.6, format: 2,
-    pool: [['DCO', 'Deportes Concepción', 'DCO', 'Ester Roa', 30400, 58, '#5e35b1', '#ffffff'], ['UDC', 'Universidad de Concepción', 'UDC', 'Ester Roa', 30400, 60, '#ffd400', '#0d47a1'], ['SWA', 'Santiago Wanderers', 'SWA', 'Elías Figueroa', 20575, 60, '#1b7a2f', '#ffffff'], ['COB', 'Cobreloa', 'COB', 'Zorros del Desierto', 12000, 62, '#ff6f00', '#ffffff'], ['TEM', 'Deportes Temuco', 'TEM', 'Germán Becker', 18400, 56, '#1b7a2f', '#ffffff']] },
+    div2: { name: 'Liga de Ascenso', format: 2 },
+    pool: [] },
   COL: { name: 'Colombia', flag: '🇨🇴', league: 'Liga BetPlay', cup: 'Copa Colombia', tv: 4, ticket: 12, socio: 10, smult: 0.35, wealth: 0.35, lib: 3, sud: 3, rel: 2, cupPrize: 0.5, leaguePrize: 0.6, format: 2,
-    pool: [['CUC', 'Cúcuta Deportivo', 'CUC', 'General Santander', 42000, 60, '#c62828', '#111111'], ['RCA', 'Real Cartagena', 'RCA', 'Jaime Morón', 16000, 56, '#ffd400', '#1b7a2f'], ['HUI', 'Atlético Huila', 'HUI', 'Guillermo Plazas Alcid', 22000, 58, '#ffd400', '#c62828'], ['JAG', 'Jaguares de Córdoba', 'JAG', 'Jaraguay', 12000, 56, '#0d47a1', '#ffd400'], ['PAT', 'Patriotas Boyacá', 'PAT', 'La Independencia', 20000, 55, '#c62828', '#111111']] },
+    pool: [['ENV', 'Envigado', 'ENV', 'Polideportivo Sur', 11000, 60, '#ff6f00', '#0b6b3a'], ['UMA', 'Unión Magdalena', 'UMA', 'Sierra Nevada', 16000, 62, '#0a3a8c', '#d50000'], ['RCA', 'Real Cartagena', 'RCA', 'Jaime Morón', 16000, 56, '#ffd400', '#1b7a2f'], ['HUI', 'Atlético Huila', 'HUI', 'Guillermo Plazas Alcid', 22000, 58, '#ffd400', '#c62828'], ['PAT', 'Patriotas Boyacá', 'PAT', 'La Independencia', 20000, 55, '#c62828', '#111111']] },
   PAR: { name: 'Paraguay', flag: '🇵🇾', league: 'Primera División', cup: 'Copa Paraguay', tv: 2, ticket: 8, socio: 8, smult: 0.5, wealth: 0.3, lib: 2, sud: 2, rel: 2, cupPrize: 0.3, leaguePrize: 0.4, format: 2,
-    pool: [['TAC', 'Tacuary', 'TAC', 'Roberto Bettega', 3000, 54, '#ffffff', '#111111'], ['RES', 'Resistencia', 'RES', 'Tomás Beggan Correa', 3000, 52, '#111111', '#ffffff'], ['RUB', 'Rubio Ñu', 'RUB', 'La Arboleda', 5000, 54, '#ffffff', '#1b7a2f'], ['SOL', 'Sol de América', 'SOL', 'Luis A. Giagni', 5000, 55, '#0d47a1', '#ffffff']] },
+    pool: [['GCA', 'General Caballero JLM', 'GCA', 'Ka\'arendy', 5000, 60, '#d50000', '#ffffff'], ['TAC', 'Tacuary', 'TAC', 'Roberto Bettega', 3000, 54, '#ffffff', '#111111'], ['RES', 'Resistencia', 'RES', 'Tomás Beggan Correa', 3000, 52, '#111111', '#ffffff'], ['SOL', 'Sol de América', 'SOL', 'Luis A. Giagni', 5000, 55, '#0d47a1', '#ffffff']] },
   PER: { name: 'Perú', flag: '🇵🇪', league: 'Liga 1', cup: 'Copa Bicentenario', tv: 2.5, ticket: 10, socio: 8, smult: 0.35, wealth: 0.3, lib: 2, sud: 2, rel: 2, cupPrize: 0.3, leaguePrize: 0.5, format: 2,
-    pool: [['UCV', 'César Vallejo', 'UCV', 'Mansiche', 25000, 60, '#ff6f00', '#0d47a1'], ['MAN', 'Carlos A. Mannucci', 'MAN', 'Mansiche', 25000, 56, '#0d47a1', '#ffffff'], ['BIN', 'Deportivo Binacional', 'BIN', 'Guillermo Briceño', 20000, 56, '#ffffff', '#111111'], ['UCO', 'Unión Comercio', 'UCO', 'IPD Moyobamba', 5000, 52, '#1b7a2f', '#ffffff']] },
+    pool: [['AYA', 'Ayacucho FC', 'AYA', 'Ciudad de Cumaná', 15000, 58, '#ff6f00', '#ffffff'], ['AUN', 'Alianza Universidad', 'AUN', 'Heraclio Tapia', 15000, 56, '#0a3a8c', '#f7c600'], ['UCV', 'César Vallejo', 'UCV', 'Mansiche', 25000, 60, '#ff6f00', '#0d47a1'], ['MAN', 'Carlos A. Mannucci', 'MAN', 'Mansiche', 25000, 56, '#0d47a1', '#ffffff'], ['BIN', 'Deportivo Binacional', 'BIN', 'Guillermo Briceño', 20000, 56, '#ffffff', '#111111'], ['UCO', 'Unión Comercio', 'UCO', 'IPD Moyobamba', 5000, 52, '#1b7a2f', '#ffffff']] },
   ECU: { name: 'Ecuador', flag: '🇪🇨', league: 'LigaPro', cup: 'Copa Ecuador', tv: 3, ticket: 10, socio: 8, smult: 0.35, wealth: 0.3, lib: 3, sud: 3, rel: 2, cupPrize: 0.4, leaguePrize: 0.5, format: 2,
-    pool: [['GCI', 'Guayaquil City', 'GCI', 'Christian Benítez', 10000, 56, '#5fa8e8', '#ffffff'], ['IMB', 'Imbabura', 'IMB', 'Olímpico de Ibarra', 18600, 54, '#0d47a1', '#ffffff'], ['GUA', 'Gualaceo', 'GUA', 'Jorge Andrade Cantos', 5000, 52, '#c62828', '#ffffff'], ['OCT', '9 de Octubre', 'OCT', 'Modelo A. Ortega', 28000, 54, '#5e35b1', '#ffffff']] },
+    pool: [['NAC', 'El Nacional', 'NAC', 'Olímpico Atahualpa', 35000, 66, '#d50000', '#0a3a8c'], ['VIN', 'Vinotinto', 'VIN', 'Olímpico Atahualpa', 35000, 56, '#7a1c2c', '#ffffff'], ['IMB', 'Imbabura', 'IMB', 'Olímpico de Ibarra', 18600, 54, '#0d47a1', '#ffffff'], ['GUA', 'Gualaceo', 'GUA', 'Jorge Andrade Cantos', 5000, 52, '#c62828', '#ffffff'], ['OCT', '9 de Octubre', 'OCT', 'Modelo A. Ortega', 28000, 54, '#5e35b1', '#ffffff']] },
   BOL: { name: 'Bolivia', flag: '🇧🇴', league: 'División Profesional', cup: 'Copa de la División Profesional', tv: 1, ticket: 6, socio: 5, smult: 0.3, wealth: 0.2, lib: 2, sud: 2, rel: 2, cupPrize: 0.15, leaguePrize: 0.25, format: 2,
     pool: [['RPA', 'Royal Pari', 'RPA', 'Tahuichi Aguilera', 38000, 54, '#0d47a1', '#ffffff'], ['PAL', 'Atlético Palmaflor', 'PAL', 'Félix Capriles', 32000, 52, '#1b7a2f', '#ffffff'], ['VDI', 'Vaca Díez', 'VDI', 'Roberto Jordán Cuéllar', 10000, 50, '#1b7a2f', '#ffd400']] },
   VEN: { name: 'Venezuela', flag: '🇻🇪', league: 'Liga FUTVE', cup: 'Copa Venezuela', tv: 0.6, ticket: 5, socio: 4, smult: 0.25, wealth: 0.15, lib: 2, sud: 2, rel: 2, cupPrize: 0.1, leaguePrize: 0.2, format: 2,
-    pool: [['MIN', 'Mineros de Guayana', 'MIN', 'CTE Cachamay', 41600, 56, '#000000', '#0d47a1'], ['HCO', 'Hermanos Colmenárez', 'HCO', 'Agustín Tovar', 29800, 52, '#c62828', '#ffd400'], ['TRU', 'Trujillanos', 'TRU', 'José Alberto Pérez', 25000, 52, '#ffffff', '#5e35b1'], ['ARA', 'Aragua FC', 'ARA', 'Olímpico Hermanos Ghersi', 14000, 50, '#c62828', '#ffd400']] },
+    pool: [['ANG', 'Angostura FC', 'ANG', 'Ricardo Tulio Maya', 8000, 54, '#0b6b3a', '#f7c600'], ['ANZ', 'Deportivo Anzoátegui', 'ANZ', 'José Antonio Anzoátegui', 40000, 56, '#d50000', '#0a3a8c'], ['MIN', 'Mineros de Guayana', 'MIN', 'CTE Cachamay', 41600, 56, '#000000', '#0d47a1'], ['HCO', 'Hermanos Colmenárez', 'HCO', 'Agustín Tovar', 29800, 52, '#c62828', '#ffd400'], ['ARA', 'Aragua FC', 'ARA', 'Olímpico Hermanos Ghersi', 14000, 50, '#c62828', '#ffd400']] },
 };
 
 // Orden en el que se muestran los países.
@@ -511,7 +534,7 @@ DT.NAMES = {
 };
 
 // ---- src/data/teams_arg.js ----
-// Liga Profesional Argentina. Planteles aproximados (temporada 2025/26).
+// Liga Profesional Argentina 2026. Planteles aproximados (temporada 2025/26).
 // Formato jugador: Nombre/Puesto(P,D,M,A)/Edad/Media
 DT.TEAMS.ARG = [
   ['RIV', 'River Plate', 'RIV', 'Más Monumental', 85018, 92, '#ffffff', '#d6001c',
@@ -552,8 +575,6 @@ DT.TEAMS.ARG = [
     'Juan Pablo Cozzani/P/27/70|Ignacio Vázquez/D/28/70|Oscar Salomón/D/25/69|Vicente Taborda/M/24/71|Franco Zapiola/M/26/69|Guido Mainero/M/30/70|Ignacio Schor/M/24/70|Augusto Lotti/A/29/70'],
   ['TIG', 'Tigre', 'TIG', 'José Dellagiovanna', 26282, 68, '#0a3a8c', '#d50000',
     'Felipe Zenobio/P/25/69|Sebastián Prieto/D/31/69|Martín Garay/M/27/69|Sebastián Medina/M/32/69|Jalil Elías/M/29/68|David Romero/A/33/70|Ignacio Russo/A/24/70'],
-  ['GOD', 'Godoy Cruz', 'GOD', 'Malvinas Argentinas', 40268, 69, '#0a3a8c', '#ffffff',
-    'Franco Petroli/P/27/70|Federico Rasmussen/D/28/69|Pier Barrios/D/35/68|Vicente Poggi/M/24/70|Salomón Rodríguez/A/25/70'],
   ['IRV', 'Independiente Rivadavia', 'IRV', 'Bautista Gargantini', 24000, 67, '#0a3a8c', '#ffffff',
     'Ezequiel Centurión/P/28/70|Matías Fernández/M/30/69|Tomás Bottari/M/25/68|Sebastián Villa/A/30/74|Alex Arce/A/30/70'],
   ['UNI', 'Unión', 'UNI', '15 de Abril', 28000, 70, '#d50000', '#ffffff',
@@ -570,14 +591,14 @@ DT.TEAMS.ARG = [
     'Ignacio Arce/P/33/68|Milton Céliz/M/33/68|Jonathan Herrera/A/34/68'],
   ['ALD', 'Aldosivi', 'ALD', 'José María Minella', 35180, 63, '#1b7a2f', '#f7d000',
     'Natanael Guzmán/A/24/68'],
-  ['SMS', 'San Martín de San Juan', 'SMS', 'Hilario Sánchez', 19000, 61, '#1b7a2f', '#111111',
-    'Matías Borgogno/P/30/68'],
   ['HUR', 'Huracán', 'HUR', 'Tomás Adolfo Ducó', 48314, 75, '#ffffff', '#d50000',
     'Hernán Galíndez/P/39/74|Fernando Tobio/D/36/70|César Ibáñez/D/33/70|Lucas Carrizo/D/28/70|Guillermo Soto/D/31/71|Hugo Nervo/D/34/69|Leonardo Gil/M/34/71|Emmanuel Ojeda/M/28/70|Rodrigo Echeverría/M/30/70|Facundo Waller/M/28/69|Matko Miljevic/M/25/70|Eric Ramírez/A/27/70|Jordy Caicedo/A/28/71'],
+  ['GIM', 'Gimnasia de Mendoza', 'GMZ', 'Víctor Legrotaglie', 11500, 62, '#0b2e6b', '#ffffff'],
+  ['ERC', 'Estudiantes de Río Cuarto', 'ERC', 'Antonio Candini', 10000, 58, '#0d47a1', '#ffffff'],
 ];
 
 // ---- src/data/teams_bra.js ----
-// Brasileirão Série A. Planteles aproximados (temporada 2025/26).
+// Brasileirão Série A 2026. Planteles aproximados (temporada 2025/26).
 DT.TEAMS.BRA = [
   ['FLA', 'Flamengo', 'FLA', 'Maracanã', 78838, 97, '#c8102e', '#111111',
     'Agustín Rossi/P/30/79|Matheus Cunha/P/24/70|Guillermo Varela/D/33/75|Emerson Royal/D/27/76|Léo Ortiz/D/30/78|Léo Pereira/D/30/78|Danilo/D/34/76|Alex Sandro/D/35/75|Ayrton Lucas/D/28/75|Erick Pulgar/M/32/76|Jorginho/M/34/79|Saúl Ñíguez/M/31/77|Allan/M/29/72|Nicolás de la Cruz/M/29/78|Giorgian de Arrascaeta/M/32/83|Jorge Carrascal/M/28/77|Luiz Araújo/A/29/76|Everton Cebolinha/A/30/75|Samuel Lino/A/26/78|Gonzalo Plata/A/25/77|Bruno Henrique/A/35/76|Pedro/A/29/80|Wallace Yan/A/21/70'],
@@ -611,6 +632,238 @@ DT.TEAMS.BRA = [
     'Lucas Arcanjo/P/27/73|Raúl Cáceres/D/34/70|Lucas Halter/D/25/71|Jamerson/D/31/69|Willian Oliveira/M/32/71|Ricardo Ryller/M/29/70|Matheuzinho/M/25/71|Gabriel Baralhas/M/28/70|Renato Kayzer/A/30/73|Osvaldo/A/38/70|Carlinhos/A/30/70|Aitor Cantalapiedra/A/29/71|Lucas Braga/A/29/70'],
   ['INT', 'Internacional', 'INT', 'Beira-Rio', 50128, 87, '#d50000', '#ffffff',
     'Sergio Rochet/P/33/77|Anthoni/P/25/72|Braian Aguirre/D/25/73|Bruno Gomes/D/24/72|Vitão/D/25/74|Gabriel Mercado/D/39/71|Alexandro Bernabei/D/25/76|Fernando/M/38/72|Thiago Maia/M/28/74|Bruno Henrique/M/36/72|Rômulo/M/24/72|Alan Patrick/M/34/77|Óscar Romero/M/33/72|Johan Carbonero/A/25/74|Vitinho/A/31/72|Enner Valencia/A/36/74|Rafael Borré/A/30/76|Ricardo Mathias/A/21/70'],
+  ['CFC', 'Coritiba', 'CFC', 'Couto Pereira', 40500, 70, '#0a6b3a', '#ffffff'],
+  ['CAP', 'Athletico Paranaense', 'CAP', 'Ligga Arena', 42370, 76, '#c8102e', '#111111'],
+  ['CHP', 'Chapecoense', 'CHA', 'Arena Condá', 20000, 66, '#0b8a3e', '#ffffff'],
+  ['REM', 'Remo', 'REM', 'Baenão', 17500, 64, '#0b1f5c', '#ffffff'],
+];
+
+// ---- src/data/teams_rest.js ----
+// Resto de Sudamérica, primeras divisiones 2026. Planteles aproximados (temporada 2025/26).
+// Los clubes con pocos nombres cargados completan su plantel con jugadores generados.
+DT.TEAMS.URU = [
+  ['PEN', 'Peñarol', 'PEÑ', 'Campeón del Siglo', 40005, 84, '#f7c600', '#111111',
+    'Washington Aguerre/P/32/73|Brayan Cortés/P/30/73|Pedro Milans/D/23/71|Javier Méndez/D/33/71|Maximiliano Olivera/D/34/71|Emanuel Gularte/D/28/72|Lucas Hernández/D/33/71|Eric Remedi/M/31/72|Jesús Trindade/M/33/72|Javier Cabrera/M/34/71|Leandro Umpiérrez/M/28/70|Leonardo Fernández/M/27/75|David Terans/M/31/72|Gastón Togni/M/28/71|Maximiliano Silvera/A/28/72|Matías Arezo/A/23/73|Diego García/A/26/71'],
+  ['NAC', 'Nacional', 'NAC', 'Gran Parque Central', 34000, 84, '#ffffff', '#0a3a8c',
+    'Luis Mejía/P/34/73|Emiliano Ancheta/D/26/71|Sebastián Coates/D/35/73|Julián Millán/D/25/70|Christian Oliva/M/29/72|Luciano Boggio/M/26/71|Rómulo Otero/M/33/72|Nicolás Lodeiro/M/37/72|Mauricio Pereyra/M/35/70|Nicolás López/A/32/73|Maximiliano Gómez/A/29/73|Gonzalo Carneiro/A/30/71|Juan Cruz de los Santos/A/24/70'],
+  ['DEF', 'Defensor Sporting', 'DEF', 'Luis Franzini', 18000, 72, '#6a1b9a', '#ffffff',
+    'Kevin Dawson/P/33/70'],
+  ['LIV', 'Liverpool', 'LIV', 'Belvedere', 9500, 71, '#111111', '#0a3a8c'],
+  ['DAN', 'Danubio', 'DAN', 'Jardines del Hipódromo', 18000, 66, '#ffffff', '#111111'],
+  ['WAN', 'Montevideo Wanderers', 'WAN', 'Parque Viera', 7400, 64, '#111111', '#ffffff'],
+  ['RAC', 'Racing de Montevideo', 'RAC', 'Osvaldo Roberto', 8500, 61, '#1b7a2f', '#ffffff'],
+  ['CLA', 'Cerro Largo', 'CLA', 'Arquitecto Antonio Ubilla', 9000, 62, '#0a3a8c', '#ffffff'],
+  ['BRI', 'Boston River', 'BOS', 'Parque Paladino', 6000, 63, '#d50000', '#ffffff'],
+  ['PRO', 'Progreso', 'PRO', 'Parque Paladino', 6000, 58, '#f7c600', '#d50000'],
+  ['JUV', 'Juventud de Las Piedras', 'JUV', 'Parque Artigas', 4000, 59, '#ffffff', '#d50000'],
+  ['CER', 'Cerro', 'CER', 'Luis Tróccoli', 25000, 61, '#5fb0e8', '#ffffff'],
+  ['MAL', 'Deportivo Maldonado', 'MAL', 'Domingo Burgueño', 22000, 58, '#d50000', '#1b7a2f'],
+  ['CES', 'Central Español', 'CES', 'Parque Palermo', 6500, 54, '#c62828', '#0d47a1'],
+  ['MCT', 'Montevideo City Torque', 'MCT', 'Charrúa', 14000, 64, '#5fa8e8', '#ffffff'],
+  ['ALB', 'Albion', 'ALB', 'Parque Dr. Carlos Suero', 3000, 56, '#d32f2f', '#0d47a1'],
+];
+DT.TEAMS.CHI = [
+  ['COL', 'Colo-Colo', 'CC', 'Monumental David Arellano', 43000, 84, '#ffffff', '#111111',
+    'Fernando de Paul/P/35/72|Mauricio Isla/D/37/71|Emiliano Amor/D/30/71|Alan Saldivia/D/25/70|Erick Wiemberg/D/31/70|Jonathan Villagra/D/24/70|Esteban Pavez/M/36/72|Arturo Vidal/M/39/74|Vicente Pizarro/M/23/72|Tomás Alarcón/M/26/70|Claudio Aquino/M/34/71|Cristián Zavala/A/26/71|Lucas Cepeda/A/23/73|Marcos Bolados/A/29/70|Javier Correa/A/34/73'],
+  ['UCH', 'Universidad de Chile', 'UCH', 'Nacional Julio Martínez', 48665, 82, '#0a3a8c', '#d50000',
+    'Gabriel Castellón/P/32/72|Cristopher Toselli/P/37/70|Franco Calderón/D/27/71|Matías Zaldivia/D/34/71|Fabián Hormazábal/D/29/71|Marcelo Morales/D/24/71|Charles Aránguiz/M/37/73|Israel Poblete/M/30/71|Javier Altamirano/M/26/72|Marcelo Díaz/M/39/70|Lucas Assadi/M/22/73|Matías Sepúlveda/A/28/72|Maximiliano Guerrero/A/25/71|Rodrigo Contreras/A/30/72|Leandro Fernández/A/34/73|Lucas Di Yorio/A/29/71|Nicolás Guerra/A/26/70|Eduardo Vargas/A/36/71'],
+  ['UCA', 'Universidad Católica', 'UC', 'Claro Arena', 20249, 78, '#ffffff', '#0a3a8c',
+    'Vicente Bernedo/P/24/70|Eugenio Mena/D/37/69|Branco Ampuero/D/32/70|Daniel González/D/23/71|Gary Medel/D/38/71|Cristian Cuevas/D/31/69|Agustín Farías/M/37/69|Jhojan Valencia/M/29/70|Alfred Canales/M/25/71|Matías Palavecino/M/34/72|Justo Giani/A/26/71|Clemente Montes/A/25/71|Diego Valencia/A/26/71|Fernando Zampedri/A/38/75'],
+  ['COQ', 'Coquimbo Unido', 'COQ', 'Francisco Sánchez Rumoroso', 18750, 72, '#f7c600', '#111111',
+    'Diego Sánchez/P/38/70|Cecilio Waterman/A/34/70'],
+  ['PAL', 'Palestino', 'PAL', 'Municipal de La Cisterna', 12000, 68, '#1b7a2f', '#d50000',
+    'Sebastián Pérez/P/35/70|Fernando Cornejo/M/30/69|Joe Abrigo/M/30/70|Junior Arias/A/32/70'],
+  ['OHI', 'O\'Higgins', 'OHI', 'El Teniente', 16000, 68, '#5fb0e8', '#ffffff',
+    'Omar Carabalí/P/28/70|Bryan Rabello/M/31/70|Martín Sarrafiore/M/28/69|Arnaldo Castillo/A/30/70'],
+  ['AUD', 'Audax Italiano', 'AUD', 'Bicentenario La Florida', 12000, 64, '#1b7a2f', '#ffffff',
+    'Tomás Ahumada/P/26/68|Ignacio Jeraldino/A/30/69'],
+  ['EVE', 'Everton de Viña del Mar', 'EVE', 'Sausalito', 22360, 64, '#0a3a8c', '#f7c600',
+    'Ignacio González/P/35/68'],
+  ['HUA', 'Huachipato', 'HUA', 'Huachipato-CAP', 10500, 66, '#0a3a8c', '#111111',
+    'Cris Martínez/A/30/70'],
+  ['CBS', 'Cobresal', 'CBS', 'El Cobre', 12000, 62, '#ff6f00', '#ffffff',
+    'Alejandro Santander/P/28/68'],
+  ['NUB', 'Ñublense', 'ÑUB', 'Nelson Oyarzún', 12000, 62, '#d50000', '#ffffff'],
+  ['SER', 'Deportes La Serena', 'SER', 'La Portada', 18000, 60, '#d50000', '#ffffff'],
+  ['LIM', 'Deportes Limache', 'LIM', 'Lucio Fariña', 5000, 57, '#d50000', '#ffffff'],
+  ['ULC', 'Unión La Calera', 'ULC', 'Nicolás Chahuán', 9200, 60, '#d50000', '#ffffff'],
+  ['DCO', 'Deportes Concepción', 'DCO', 'Ester Roa', 30400, 58, '#5e35b1', '#ffffff'],
+  ['UDC', 'Universidad de Concepción', 'UDC', 'Ester Roa', 30400, 60, '#ffd400', '#0d47a1'],
+];
+DT.TEAMS.COL = [
+  ['NAL', 'Atlético Nacional', 'NAL', 'Atanasio Girardot', 40943, 84, '#0b6b3a', '#ffffff',
+    'David Ospina/P/37/74|Harlen Castillo/P/28/70|Andrés Román/D/30/71|William Tesillo/D/36/70|Simón García/D/22/70|Jorman Campuzano/M/29/71|Matheus Uribe/M/35/72|Edwin Cardona/M/33/74|Marino Hinestroza/A/23/74|Alfredo Morelos/A/30/73|Dairon Asprilla/A/34/71'],
+  ['MIL', 'Millonarios', 'MIL', 'El Campín', 36343, 81, '#0a3a8c', '#ffffff',
+    'Álvaro Montero/P/31/73|Diego Novoa/P/37/70|Andrés Llinás/D/28/71|Jorge Arias/D/33/70|Danovis Banguero/D/34/69|Daniel Cataño/M/33/71|David Mackalister Silva/M/39/72|Daniel Ruiz/M/24/71|Leonardo Castro/A/34/72|Santiago Giordana/A/30/71|Radamel Falcao/A/40/70'],
+  ['AME', 'América de Cali', 'AME', 'Pascual Guerrero', 38000, 79, '#d50000', '#ffffff',
+    'Jorge Soto/P/32/70|Rafael Carrascal/M/33/70|Cristian Barrios/A/28/71|Rodrigo Holgado/A/30/72|Adrián Ramos/A/40/69'],
+  ['CAL', 'Deportivo Cali', 'CAL', 'Deportivo Cali', 42000, 72, '#0b6b3a', '#ffffff'],
+  ['JUN', 'Junior de Barranquilla', 'JUN', 'Metropolitano', 46692, 78, '#d50000', '#ffffff',
+    'Didier Moreno/M/34/71|Yimmi Chará/M/35/71|Carlos Bacca/A/39/72|Guillermo Paiva/A/28/71|Teófilo Gutiérrez/A/41/68'],
+  ['SFE', 'Independiente Santa Fe', 'SFE', 'El Campín', 36343, 77, '#d50000', '#ffffff',
+    'Andrés Mosquera Marmolejo/P/34/71|Daniel Torres/M/36/70|Hugo Rodallega/A/40/70'],
+  ['DIM', 'Independiente Medellín', 'DIM', 'Atanasio Girardot', 40943, 76, '#d50000', '#0a3a8c',
+    'Andrés Cadavid/D/40/68|Brayan León/A/26/71|Francisco Fydriszewski/A/33/71'],
+  ['ONC', 'Once Caldas', 'ONC', 'Palogrande', 31611, 71, '#ffffff', '#111111',
+    'Dayro Moreno/A/40/71'],
+  ['TOL', 'Deportes Tolima', 'TOL', 'Manuel Murillo Toro', 28100, 73, '#7a1c2c', '#f7c600',
+    'Yeison Guzmán/M/27/71'],
+  ['BUC', 'Atlético Bucaramanga', 'BUC', 'Alfonso López', 25000, 70, '#f7c600', '#0b6b3a'],
+  ['PER', 'Deportivo Pereira', 'PER', 'Hernán Ramírez Villegas', 30297, 66, '#d50000', '#f7c600'],
+  ['ALI', 'Alianza FC', 'ALI', 'Armando Maestre Pavajeau', 11000, 60, '#0a3a8c', '#ffffff'],
+  ['AGU', 'Águilas Doradas', 'AGU', 'Alberto Grisales', 14000, 61, '#f7c600', '#111111'],
+  ['FCE', 'Fortaleza CEIF', 'FOR', 'Metropolitano de Techo', 8000, 60, '#111111', '#f7c600'],
+  ['CHI', 'Boyacá Chicó', 'CHI', 'La Independencia', 20000, 58, '#0a3a8c', '#f7c600'],
+  ['IBO', 'Internacional de Bogotá', 'IBO', 'Metropolitano de Techo', 8000, 58, '#d50000', '#ffffff'],
+  ['LLA', 'Llaneros', 'LLA', 'Bello Horizonte', 15000, 57, '#d50000', '#f7c600'],
+  ['PAS', 'Deportivo Pasto', 'PAS', 'Departamental Libertad', 20000, 63, '#d50000', '#0a3a8c'],
+  ['CUC', 'Cúcuta Deportivo', 'CUC', 'General Santander', 42000, 60, '#c62828', '#111111'],
+  ['JAG', 'Jaguares de Córdoba', 'JAG', 'Jaraguay', 12000, 56, '#0d47a1', '#ffd400'],
+];
+DT.TEAMS.PAR = [
+  ['OLI', 'Olimpia', 'OLI', 'Manuel Ferreira', 25000, 79, '#ffffff', '#111111',
+    'Gastón Olveira/P/32/71|Richard Ortiz/M/36/71|Alejandro Silva/M/36/70|Derlis González/A/32/72'],
+  ['CCP', 'Cerro Porteño', 'CCP', 'La Nueva Olla', 45000, 80, '#0a3a8c', '#d50000',
+    'Alexis Martín Arias/P/33/71|Federico Carrizo/M/34/72|Juan Manuel Iturbe/A/32/71|Cecilio Domínguez/A/31/72'],
+  ['LIB', 'Libertad', 'LIB', 'Dr. Nicolás Leoz', 10000, 77, '#111111', '#ffffff',
+    'Rodrigo Morínigo/P/27/70|Lorenzo Melgarejo/A/35/71|Héctor Villalba/A/31/71|Óscar Cardozo/A/43/67'],
+  ['GUA', 'Guaraní', 'GUA', 'Rogelio Livieres', 8000, 69, '#f7c600', '#111111'],
+  ['NAC', 'Nacional (PAR)', 'NAC', 'Arsenio Erico', 4500, 65, '#ffffff', '#0a3a8c'],
+  ['LUQ', 'Sportivo Luqueño', 'LUQ', 'Feliciano Cáceres', 24000, 64, '#0a3a8c', '#f7c600'],
+  ['AME', 'Sportivo Ameliano', 'AME', 'José Tomás Silva', 5000, 61, '#0a3a8c', '#ffffff'],
+  ['DMA', '2 de Mayo', '2DM', 'Río Parapití', 25000, 60, '#111111', '#f7c600'],
+  ['TRI', 'Sportivo Trinidense', 'TRI', 'Martín Torres', 3000, 58, '#d50000', '#ffffff'],
+  ['REC', 'Recoleta', 'REC', 'Ricardo Gregor', 3000, 57, '#d50000', '#ffffff'],
+  ['SSL', 'Sportivo San Lorenzo', 'SSL', 'Gunther Vogel', 5000, 57, '#d50000', '#ffffff'],
+  ['RUB', 'Rubio Ñu', 'RUB', 'La Arboleda', 5000, 54, '#ffffff', '#1b7a2f'],
+];
+DT.TEAMS.PER = [
+  ['UNI', 'Universitario', 'U', 'Monumental', 80093, 82, '#f5e6c8', '#a51e1e',
+    'Sebastián Britos/P/36/71|Aldo Corzo/D/37/70|Williams Riveros/D/33/71|Matías Di Benedetto/D/32/70|Rodrigo Ureña/M/32/70|Martín Pérez Guedes/M/34/70|Jairo Concha/M/27/71|Andy Polo/M/31/71|Edison Flores/A/32/71|Alex Valera/A/29/72|José Rivera/A/28/70'],
+  ['ALI', 'Alianza Lima', 'ALI', 'Alejandro Villanueva', 35000, 82, '#0a3a8c', '#ffffff',
+    'Guillermo Viscarra/P/32/71|Carlos Zambrano/D/36/71|Renzo Garcés/D/30/70|Jesús Castillo/M/24/70|Sergio Peña/M/30/72|Pablo Ceppelini/M/34/70|Kevin Quevedo/A/28/70|Gaspar Gentile/A/30/70|Alan Cantero/A/26/70|Hernán Barcos/A/41/70|Paolo Guerrero/A/42/68'],
+  ['SCR', 'Sporting Cristal', 'SCR', 'Alberto Gallardo', 11600, 80, '#5fb0e8', '#ffffff',
+    'Diego Enríquez/P/25/70|Yoshimar Yotún/M/35/72|Gustavo Cazonatti/M/30/70|Irven Ávila/A/35/69|Martín Cauteruccio/A/38/71'],
+  ['MEL', 'Melgar', 'MEL', 'Monumental de la UNSA', 40370, 72, '#d50000', '#111111',
+    'Bernardo Cuesta/A/37/70'],
+  ['CIE', 'Cienciano', 'CIE', 'Inca Garcilaso de la Vega', 45000, 70, '#d50000', '#ffffff'],
+  ['CUS', 'Cusco FC', 'CUS', 'Inca Garcilaso de la Vega', 45000, 66, '#f7c600', '#111111'],
+  ['HUA', 'Sport Huancayo', 'SHU', 'Estadio Huancayo', 20000, 64, '#d50000', '#ffffff'],
+  ['ADT', 'ADT de Tarma', 'ADT', 'Unión Tarma', 9000, 62, '#5fb0e8', '#ffffff'],
+  ['AAT', 'Alianza Atlético', 'AAT', 'Campeones del 36', 8000, 62, '#ffffff', '#0a3a8c'],
+  ['GRA', 'Atlético Grau', 'GRA', 'Campeones del 36', 8000, 62, '#f7c600', '#ffffff'],
+  ['GAR', 'Deportivo Garcilaso', 'GAR', 'Inca Garcilaso de la Vega', 45000, 62, '#5fb0e8', '#ffffff'],
+  ['CUN', 'Comerciantes Unidos', 'COM', 'Juan Maldonado Gamarra', 12000, 58, '#5fb0e8', '#ffffff'],
+  ['UTC', 'UTC Cajamarca', 'UTC', 'Héroes de San Ramón', 18000, 58, '#d50000', '#ffffff'],
+  ['CHK', 'Los Chankas', 'CHK', 'Los Chankas', 10000, 58, '#d50000', '#ffffff'],
+  ['SBO', 'Sport Boys', 'SBO', 'Miguel Grau', 17000, 64, '#ff69b4', '#111111'],
+  ['JPC', 'Juan Pablo II College', 'JPII', 'Juan Pablo II', 5000, 56, '#f7c600', '#0a3a8c'],
+  ['MOQ', 'Deportivo Moquegua', 'MOQ', '25 de Noviembre', 21000, 56, '#0d47a1', '#ffffff'],
+  ['CAJ', 'FC Cajamarca', 'CAJ', 'Héroes de San Ramón', 18000, 55, '#d32f2f', '#ffffff'],
+];
+DT.TEAMS.ECU = [
+  ['IDV', 'Independiente del Valle', 'IDV', 'Banco Guayaquil', 12000, 82, '#111111', '#0a3a8c',
+    'Moisés Ramírez/P/25/72|Lorenzo Faravelli/M/32/72|Junior Sornoza/M/31/72|Claudio Spinelli/A/28/71'],
+  ['LDU', 'Liga de Quito', 'LDU', 'Rodrigo Paz Delgado', 41575, 82, '#ffffff', '#d50000',
+    'Gonzalo Valle/P/29/72|Ricardo Adé/D/35/71|Leonel Quiñónez/D/32/70|Alexander Alvarado/M/26/72|Gabriel Villamil/M/24/72|Alex Arce/A/30/72|Jeison Medina/A/31/71|Lisandro Alzugaray/A/35/70|Bryan Ramírez/A/28/70'],
+  ['BSC', 'Barcelona SC', 'BSC', 'Monumental Banco Pichincha', 57267, 80, '#f7c600', '#d50000',
+    'José Contreras/P/32/70|Leonai Souza/M/30/70|Janner Corozo/A/30/71|Octavio Rivero/A/33/71|Felipe Caicedo/A/37/69'],
+  ['EME', 'Emelec', 'EME', 'George Capwell', 40000, 74, '#0a3a8c', '#ffffff',
+    'Pedro Ortiz/P/35/69'],
+  ['AUC', 'Aucas', 'AUC', 'Gonzalo Pozo Ripalda', 18800, 68, '#f7c600', '#d50000'],
+  ['UCQ', 'Universidad Católica (ECU)', 'UCQ', 'Olímpico Atahualpa', 35000, 67, '#5fb0e8', '#ffffff'],
+  ['CUE', 'Deportivo Cuenca', 'CUE', 'Alejandro Serrano Aguilar', 16540, 64, '#d50000', '#111111'],
+  ['ORE', 'Orense', 'ORE', '9 de Mayo', 16000, 65, '#0b6b3a', '#ffffff'],
+  ['MUS', 'Mushuc Runa', 'MUS', 'Echaleche', 8000, 62, '#d50000', '#ffffff'],
+  ['DEL', 'Delfín', 'DEL', 'Jocay', 17000, 64, '#f7c600', '#0a3a8c'],
+  ['TEC', 'Técnico Universitario', 'TEC', 'Bellavista', 16000, 60, '#d50000', '#ffffff'],
+  ['MAC', 'Macará', 'MAC', 'Bellavista', 16000, 62, '#5fb0e8', '#ffffff'],
+  ['LIB', 'Libertad FC', 'LIB', 'Reina del Cisne', 14935, 58, '#d50000', '#ffffff'],
+  ['MAN', 'Manta FC', 'MAN', 'Jocay', 17000, 58, '#5fb0e8', '#ffffff'],
+  ['GCI', 'Guayaquil City', 'GCI', 'Christian Benítez', 10000, 56, '#5fa8e8', '#ffffff'],
+  ['LDN', 'Leones del Norte', 'LDN', 'Olímpico de Ibarra', 18600, 55, '#d32f2f', '#ffd400'],
+];
+DT.TEAMS.BOL = [
+  ['BOL', 'Bolívar', 'BOL', 'Hernando Siles', 41143, 77, '#5fb0e8', '#ffffff',
+    'Carlos Lampe/P/39/70|Ramiro Vaca/M/26/71|Carmelo Algarañaz/A/29/70|Patricio Rodríguez/A/36/70'],
+  ['STR', 'The Strongest', 'TSG', 'Hernando Siles', 41143, 72, '#f7c600', '#111111'],
+  ['ALW', 'Always Ready', 'ALW', 'Municipal de El Alto', 25000, 68, '#d50000', '#ffffff'],
+  ['BLO', 'Blooming', 'BLO', 'Tahuichi Aguilera', 38000, 66, '#5fb0e8', '#ffffff'],
+  ['ORI', 'Oriente Petrolero', 'ORI', 'Tahuichi Aguilera', 38000, 66, '#0b6b3a', '#ffffff'],
+  ['WIL', 'Jorge Wilstermann', 'WIL', 'Félix Capriles', 32000, 66, '#d50000', '#0a3a8c'],
+  ['AUR', 'Aurora', 'AUR', 'Félix Capriles', 32000, 60, '#5fb0e8', '#ffffff'],
+  ['NPO', 'Nacional Potosí', 'NPO', 'Víctor Agustín Ugarte', 32105, 60, '#5fb0e8', '#ffffff'],
+  ['TOM', 'Real Tomayapo', 'TOM', 'IV Centenario', 15000, 56, '#d50000', '#ffffff'],
+  ['GUB', 'Guabirá', 'GUB', 'Gilberto Parada', 13000, 58, '#d50000', '#ffffff'],
+  ['SAB', 'San Antonio Bulo Bulo', 'SAB', 'Carlos Villegas', 8000, 58, '#0b6b3a', '#ffffff'],
+  ['GVS', 'GV San José', 'SJO', 'Jesús Bermúdez', 30000, 58, '#0a3a8c', '#ffffff'],
+  ['ROR', 'Real Oruro', 'ROR', 'Jesús Bermúdez', 30000, 56, '#0a3a8c', '#ffffff'],
+  ['UVI', 'Universitario de Vinto', 'UVI', 'Municipal de Vinto', 6000, 56, '#d50000', '#ffffff'],
+  ['IPE', 'Independiente Petrolero', 'IPE', 'Olímpico Patria', 30700, 58, '#f7c600', '#d50000'],
+  ['ABB', 'Academia del Balompié Boliviano', 'ABB', 'Municipal de Sacaba', 5000, 56, '#0a3a8c', '#ffffff'],
+];
+DT.TEAMS.VEN = [
+  ['TAC', 'Deportivo Táchira', 'TÁC', 'Pueblo Nuevo', 38755, 67, '#f7c600', '#111111'],
+  ['CAR', 'Caracas FC', 'CAR', 'Olímpico de la UCV', 23940, 67, '#d50000', '#ffffff'],
+  ['CBO', 'Carabobo FC', 'CBO', 'Misael Delgado', 10000, 63, '#7a1c2c', '#ffffff'],
+  ['UCV', 'Universidad Central', 'UCV', 'Olímpico de la UCV', 23940, 63, '#0a3a8c', '#ffffff'],
+  ['MON', 'Monagas SC', 'MON', 'Monumental de Maturín', 51796, 61, '#0a3a8c', '#d50000'],
+  ['MET', 'Metropolitanos', 'MET', 'Olímpico de la UCV', 23940, 58, '#5e35b1', '#ffffff'],
+  ['APC', 'Academia Puerto Cabello', 'APC', 'La Bombonera de Puerto Cabello', 7500, 61, '#0b6b3a', '#ffffff'],
+  ['LGU', 'Deportivo La Guaira', 'LGU', 'Olímpico de la UCV', 23940, 61, '#ff6f00', '#0a3a8c'],
+  ['POR', 'Portuguesa FC', 'POR', 'General José Antonio Páez', 18000, 56, '#d50000', '#111111'],
+  ['ZAM', 'Zamora FC', 'ZAM', 'Agustín Tovar', 29800, 59, '#111111', '#ffffff'],
+  ['EME', 'Estudiantes de Mérida', 'EDM', 'Metropolitano de Mérida', 42000, 57, '#d50000', '#ffffff'],
+  ['RAY', 'Rayo Zuliano', 'RAY', 'Pachencho Romero', 40800, 56, '#0a3a8c', '#ffffff'],
+  ['TRU', 'Trujillanos', 'TRU', 'José Alberto Pérez', 25000, 52, '#ffffff', '#5e35b1'],
+  ['AAN', 'Academia Anzoátegui', 'AAN', 'José Antonio Anzoátegui', 37000, 54, '#d32f2f', '#ffffff'],
+];
+
+// ---- src/data/teams_div2.js ----
+// Segundas divisiones 2026 (se juegan en Argentina, Brasil, Uruguay y Chile).
+// Los clubes sin plantel cargado se completan con jugadores generados.
+DT.TEAMS2 = DT.TEAMS2 || {};
+DT.TEAMS2.ARG = [
+  ['GOD', 'Godoy Cruz', 'GOD', 'Malvinas Argentinas', 40268, 69, '#0a3a8c', '#ffffff',
+    'Franco Petroli/P/27/70|Federico Rasmussen/D/28/69|Pier Barrios/D/35/68|Vicente Poggi/M/24/70|Salomón Rodríguez/A/25/70'],
+  ['SMS', 'San Martín de San Juan', 'SMS', 'Hilario Sánchez', 19000, 61, '#1b7a2f', '#111111',
+    'Matías Borgogno/P/30/68'],
+  ['ALM', 'Almagro', 'ALM', 'Tres de Febrero', 19000, 57, '#1e3a8a', '#111111'],
+  ['ALV', 'Alvarado', 'ALV', 'José María Minella', 35000, 55, '#0d47a1', '#ffffff'],
+  ['ARS', 'Arsenal de Sarandí', 'ARS', 'Julio H. Grondona', 16300, 60, '#5fa8e8', '#c62828'],
+  ['ALB', 'All Boys', 'ALB', 'Islas Malvinas', 21000, 58, '#ffffff', '#111111'],
+  ['ATL', 'Atlanta', 'ATL', 'Don León Kolbowski', 14500, 57, '#ffd400', '#0d47a1'],
+  ['COG', 'Colegiales', 'COG', 'Libertarios Unidos', 5000, 52, '#1e3a8a', '#d32f2f'],
+  ['MAD', 'Deportivo Madryn', 'MAD', 'Abel Sastre', 10000, 55, '#111111', '#ffffff'],
+  ['MAI', 'Deportivo Maipú', 'MAI', 'Higinio Sperdutti', 10000, 54, '#d32f2f', '#ffffff'],
+  ['FER', 'Ferro Carril Oeste', 'FER', 'Arq. Ricardo Etcheverri', 24400, 60, '#1b7a2f', '#ffffff'],
+  ['GYT', 'Gimnasia y Tiro', 'GYT', 'Gigante del Norte', 20000, 54, '#ffffff', '#0d47a1'],
+  ['GUE', 'Güemes', 'GUE', 'Arturo Miranda', 10000, 53, '#0d47a1', '#ffffff'],
+  ['LAD', 'Los Andes', 'LAD', 'Eduardo Gallardón', 28000, 56, '#d32f2f', '#ffffff'],
+  ['PAT', 'Patronato', 'PAT', 'Presbítero Bartolomé Grella', 22000, 58, '#d32f2f', '#111111'],
+  ['QUI', 'Quilmes', 'QUI', 'Centenario', 30200, 62, '#ffffff', '#0d47a1'],
+  ['RAF', 'Racing de Córdoba', 'RCO', 'Miguel Sancho', 15000, 54, '#5fa8e8', '#ffffff'],
+  ['SMT', 'San Martín de Tucumán', 'SMT', 'La Ciudadela', 30000, 63, '#d32f2f', '#ffffff'],
+  ['SMI', 'San Miguel', 'SMI', 'Malvinas Argentinas', 6000, 52, '#2e7d32', '#ffffff'],
+  ['TSU', 'Tristán Suárez', 'TSU', 'Ciudad de Tristán Suárez', 7000, 52, '#0d47a1', '#ffffff'],
+  ['EBA', 'Estudiantes de Buenos Aires', 'EBA', 'Ciudad de Caseros', 16000, 56, '#111111', '#ffffff'],
+  ['MOR', 'Deportivo Morón', 'MOR', 'Nuevo Francisco Urbano', 32000, 58, '#d32f2f', '#ffffff'],
+  ['GJU', 'Gimnasia de Jujuy', 'GJU', '23 de Agosto', 23000, 57, '#0d47a1', '#ffffff'],
+  ['TEM', 'Temperley', 'TEM', 'Alfredo Beranger', 12000, 56, '#5fa8e8', '#ffffff'],
+  ['AGR', 'Agropecuario', 'AGR', 'Ofelia Rosenzuaig', 7000, 52, '#2e7d32', '#ffd400'],
+  ['CFE', 'Chaco For Ever', 'CFE', 'Juan Alberto García', 20000, 53, '#111111', '#ffffff'],
+  ['CHA', 'Chacarita Juniors', 'CHA', 'Chacarita Juniors', 19000, 60, '#d50000', '#111111'],
+  ['DEB', 'Defensores de Belgrano', 'DEB', 'Juan Pasquale', 10000, 55, '#d32f2f', '#111111'],
+  ['NCH', 'Nueva Chicago', 'NCH', 'República de Mataderos', 28500, 58, '#2e7d32', '#111111'],
+  ['STE', 'San Telmo', 'STE', 'Osvaldo Baletto', 3000, 52, '#5fa8e8', '#ffffff'],
+  ['MIT', 'Mitre', 'MIT', 'José y Antonio Castiglione', 13000, 53, '#ffd400', '#111111'],
+  ['ABR', 'Almirante Brown', 'ABR', 'Fragata Presidente Sarmiento', 25000, 56, '#ffd400', '#111111'],
+  ['CNO', 'Central Norte', 'CNO', 'Dr. Luis Güemes', 5000, 51, '#111111', '#ffffff'],
+  ['COL', 'Colón', 'COL', 'Brigadier López', 40000, 68, '#d50000', '#111111'],
+  ['TRE', 'Talleres de Remedios de Escalada', 'TRE', 'Talleres', 10000, 52, '#d32f2f', '#ffffff'],
+  ['DUN', 'Defensores Unidos', 'DUN', 'Gigante de Villa Fox', 5000, 51, '#0d47a1', '#ffd400'],
+];
+DT.TEAMS2.BRA = [
   ['CEA', 'Ceará', 'CEA', 'Castelão', 63903, 73, '#111111', '#ffffff',
     'Richard/P/34/71|Marllon/D/33/71|Willian Machado/D/30/70|Matheus Bahia/D/26/70|Dieguinho/M/26/71|Lourenço/M/28/70|Fernando Sobral/M/30/71|Lucas Mugni/M/33/72|Pedro Raul/A/29/73|Galeano/A/32/71|Aylon/A/33/70'],
   ['FOR', 'Fortaleza', 'FOR', 'Castelão', 63903, 79, '#0a3a8c', '#d50000',
@@ -619,183 +872,338 @@ DT.TEAMS.BRA = [
     'Gustavo/P/30/70|Rodrigo Sam/D/28/70|Wilker Ángel/D/32/70|Alan Ruschel/D/36/69|Jadson/M/33/70|Caíque/M/28/70|Mandaca/M/25/70|Nenê/M/44/67|Gilberto/A/36/70|Emerson Batalla/A/32/70|Taliari/A/30/69'],
   ['SPO', 'Sport Recife', 'SPO', 'Ilha do Retiro', 26418, 71, '#d50000', '#111111',
     'Caíque França/P/30/70|Rafael Thyere/D/32/70|Igor Cariús/D/32/69|Lucas Lima/M/35/71|Christian Rivera/M/28/70|Sérgio Oliveira/M/33/71|Pablo/A/34/70|Gonzalo Barreto/A/33/70|Derik Lacerda/A/26/69|Romarinho/A/34/70'],
+  ['AMG', 'América Mineiro', 'AME', 'Independência', 23000, 68, '#0b8a3e', '#111111'],
+  ['ATH', 'Athletic', 'ATH', 'Joaquim Portugal', 7000, 57, '#111111', '#ffffff'],
+  ['ACG', 'Atlético Goianiense', 'ACG', 'Antônio Accioly', 12500, 64, '#d32f2f', '#111111'],
+  ['AVA', 'Avaí', 'AVA', 'Ressacada', 17800, 64, '#0d47a1', '#ffffff'],
+  ['BSP', 'Botafogo-SP', 'BSP', 'Santa Cruz', 29000, 58, '#d32f2f', '#111111'],
+  ['CRB', 'CRB', 'CRB', 'Rei Pelé', 17000, 62, '#d32f2f', '#ffffff'],
+  ['CRI', 'Criciúma', 'CRI', 'Heriberto Hülse', 19000, 64, '#ffd400', '#111111'],
+  ['CUI', 'Cuiabá', 'CUI', 'Arena Pantanal', 44000, 66, '#0b6b2e', '#ffd400'],
+  ['GOI', 'Goiás', 'GOI', 'Serrinha', 14450, 68, '#0b6b2e', '#ffffff'],
+  ['LON', 'Londrina', 'LON', 'Estádio do Café', 31000, 58, '#5fa8e8', '#ffffff'],
+  ['NAU', 'Náutico', 'NAU', 'Aflitos', 22800, 62, '#d32f2f', '#ffffff'],
+  ['NOV', 'Novorizontino', 'NOV', 'Jorjão', 16000, 64, '#ffd400', '#111111'],
+  ['OPE', 'Operário Ferroviário', 'OPE', 'Germano Krüger', 10500, 58, '#111111', '#ffffff'],
+  ['PON', 'Ponte Preta', 'PON', 'Moisés Lucarelli', 17700, 63, '#111111', '#ffffff'],
+  ['SBE', 'São Bernardo', 'SBE', 'Primeiro de Maio', 15000, 56, '#ffd400', '#111111'],
+  ['VIL', 'Vila Nova', 'VIL', 'Onésio Brasileiro Alvarenga', 11000, 60, '#d32f2f', '#ffffff'],
+];
+DT.TEAMS2.URU = [
+  ['PLZ', 'Plaza Colonia', 'PLZ', 'Alberto Suppici', 12000, 58, '#1b7a2f', '#ffffff'],
+  ['RIV', 'River Plate (URU)', 'RPM', 'Parque Saroldi', 6000, 61, '#d50000', '#ffffff'],
+  ['MIR', 'Miramar Misiones', 'MIR', 'Parque Palermo', 6500, 55, '#111111', '#f7c600'],
+  ['ATE', 'Atenas de San Carlos', 'ATE', 'Atenas', 6000, 52, '#ffffff', '#0d47a1'],
+  ['CRR', 'Cerrito', 'CRR', 'Parque Maracaná', 4000, 50, '#ffd400', '#2e7d32'],
+  ['FEN', 'Fénix', 'FEN', 'Parque Capurro', 5500, 55, '#5e35b1', '#ffffff'],
+  ['ORI', 'Oriental de La Paz', 'ORI', 'Parque Fernández', 4000, 50, '#d32f2f', '#ffffff'],
+  ['COL', 'Colón FC', 'COL', 'Parque Palermo', 3000, 49, '#d32f2f', '#111111'],
+  ['REN', 'Rentistas', 'REN', 'Complejo Rentistas', 10600, 54, '#ffffff', '#c62828'],
+  ['HUR', 'Huracán FC', 'HUR', 'Parque Paysandú', 2000, 48, '#d32f2f', '#ffffff'],
+  ['UMO', 'Uruguay Montevideo', 'UMO', 'Parque Viera', 3000, 48, '#5fa8e8', '#ffffff'],
+  ['LUZ', 'La Luz', 'LUZ', 'Parque Rodó', 2000, 48, '#ffd400', '#0d47a1'],
+  ['TAC', 'Tacuarembó', 'TAC', 'Raúl Goyenola', 7000, 52, '#c62828', '#111111'],
+  ['PAY', 'Paysandú FC', 'PAY', 'Parque Artigas', 25000, 49, '#ffffff', '#0d47a1'],
+];
+DT.TEAMS2.CHI = [
+  ['UES', 'Unión Española', 'UES', 'Santa Laura', 19000, 63, '#d50000', '#f7c600'],
+  ['IQU', 'Deportes Iquique', 'IQU', 'Tierra de Campeones', 13000, 60, '#5fb0e8', '#ffffff'],
+  ['RAN', 'Rangers de Talca', 'RAN', 'Fiscal de Talca', 8200, 56, '#d32f2f', '#111111'],
+  ['COB', 'Cobreloa', 'COB', 'Zorros del Desierto', 12000, 62, '#ff6f00', '#ffffff'],
+  ['SWA', 'Santiago Wanderers', 'SWA', 'Elías Figueroa', 20575, 60, '#1b7a2f', '#ffffff'],
+  ['ANT', 'Deportes Antofagasta', 'ANT', 'Calvo y Bascuñán', 21000, 56, '#5fa8e8', '#ffffff'],
+  ['MAG', 'Magallanes', 'MAG', 'Santiago Bueras', 7000, 55, '#5fa8e8', '#ffffff'],
+  ['SLQ', 'San Luis de Quillota', 'SLQ', 'Lucio Fariña', 7000, 54, '#ffd400', '#111111'],
+  ['PMO', 'Deportes Puerto Montt', 'PMO', 'Chinquihue', 10000, 53, '#d32f2f', '#ffffff'],
+  ['REC', 'Deportes Recoleta', 'REC', 'Municipal de Recoleta', 3000, 50, '#d32f2f', '#111111'],
+  ['SMA', 'San Marcos de Arica', 'SMA', 'Carlos Dittborn', 10000, 52, '#5fa8e8', '#ffffff'],
+  ['COP', 'Deportes Copiapó', 'COP', 'Luis Valenzuela Hermosilla', 8000, 52, '#ffd400', '#2e7d32'],
+  ['TEM', 'Deportes Temuco', 'TEM', 'Germán Becker', 18400, 56, '#1b7a2f', '#ffffff'],
+  ['CUR', 'Curicó Unido', 'CUR', 'La Granja', 8000, 53, '#d32f2f', '#ffffff'],
+  ['USF', 'Unión San Felipe', 'USF', 'Municipal de San Felipe', 12000, 52, '#d32f2f', '#ffffff'],
+  ['SCZ', 'Deportes Santa Cruz', 'SCZ', 'Joaquín Muñoz García', 5000, 51, '#0d47a1', '#ffffff'],
 ];
 
-// ---- src/data/teams_rest.js ----
-// Resto de Sudamérica. Planteles aproximados (temporada 2025/26).
-// Los clubes con pocos nombres cargados completan su plantel con jugadores generados.
-DT.TEAMS.URU = [
-  ['PEN', 'Peñarol', 'PEÑ', 'Campeón del Siglo', 40005, 84, '#f7c600', '#111111',
-    'Washington Aguerre/P/32/73|Brayan Cortés/P/30/73|Pedro Milans/D/23/71|Javier Méndez/D/33/71|Maximiliano Olivera/D/34/71|Emanuel Gularte/D/28/72|Lucas Hernández/D/33/71|Eric Remedi/M/31/72|Jesús Trindade/M/33/72|Javier Cabrera/M/34/71|Leandro Umpiérrez/M/28/70|Leonardo Fernández/M/27/75|David Terans/M/31/72|Gastón Togni/M/28/71|Maximiliano Silvera/A/28/72|Matías Arezo/A/23/73|Diego García/A/26/71'],
-  ['NAC', 'Nacional', 'NAC', 'Gran Parque Central', 34000, 84, '#ffffff', '#0a3a8c',
-    'Luis Mejía/P/34/73|Emiliano Ancheta/D/26/71|Sebastián Coates/D/35/73|Julián Millán/D/25/70|Christian Oliva/M/29/72|Luciano Boggio/M/26/71|Rómulo Otero/M/33/72|Nicolás Lodeiro/M/37/72|Mauricio Pereyra/M/35/70|Nicolás López/A/32/73|Maximiliano Gómez/A/29/73|Gonzalo Carneiro/A/30/71|Juan Cruz de los Santos/A/24/70'],
-  ['DEF', 'Defensor Sporting', 'DEF', 'Luis Franzini', 18000, 72, '#6a1b9a', '#ffffff', 'Kevin Dawson/P/33/70'],
-  ['LIV', 'Liverpool', 'LIV', 'Belvedere', 9500, 71, '#111111', '#0a3a8c', ''],
-  ['DAN', 'Danubio', 'DAN', 'Jardines del Hipódromo', 18000, 66, '#ffffff', '#111111', ''],
-  ['WAN', 'Montevideo Wanderers', 'WAN', 'Parque Viera', 7400, 64, '#111111', '#ffffff', ''],
-  ['RAC', 'Racing de Montevideo', 'RAC', 'Osvaldo Roberto', 8500, 61, '#1b7a2f', '#ffffff', ''],
-  ['CLA', 'Cerro Largo', 'CLA', 'Arquitecto Antonio Ubilla', 9000, 62, '#0a3a8c', '#ffffff', ''],
-  ['BRI', 'Boston River', 'BOS', 'Parque Paladino', 6000, 63, '#d50000', '#ffffff', ''],
-  ['PLZ', 'Plaza Colonia', 'PLZ', 'Alberto Suppici', 12000, 58, '#1b7a2f', '#ffffff', ''],
-  ['PRO', 'Progreso', 'PRO', 'Parque Paladino', 6000, 58, '#f7c600', '#d50000', ''],
-  ['JUV', 'Juventud de Las Piedras', 'JUV', 'Parque Artigas', 4000, 59, '#ffffff', '#d50000', ''],
-  ['RIV', 'River Plate (URU)', 'RPM', 'Parque Saroldi', 6000, 61, '#d50000', '#ffffff', ''],
-  ['CER', 'Cerro', 'CER', 'Luis Tróccoli', 25000, 61, '#5fb0e8', '#ffffff', ''],
-  ['MIR', 'Miramar Misiones', 'MIR', 'Parque Palermo', 6500, 55, '#111111', '#f7c600', ''],
-  ['MAL', 'Deportivo Maldonado', 'MAL', 'Domingo Burgueño', 22000, 58, '#d50000', '#1b7a2f', ''],
-];
-
-DT.TEAMS.CHI = [
-  ['COL', 'Colo-Colo', 'CC', 'Monumental David Arellano', 43000, 84, '#ffffff', '#111111',
-    'Fernando de Paul/P/35/72|Mauricio Isla/D/37/71|Emiliano Amor/D/30/71|Alan Saldivia/D/25/70|Erick Wiemberg/D/31/70|Jonathan Villagra/D/24/70|Esteban Pavez/M/36/72|Arturo Vidal/M/39/74|Vicente Pizarro/M/23/72|Tomás Alarcón/M/26/70|Claudio Aquino/M/34/71|Cristián Zavala/A/26/71|Lucas Cepeda/A/23/73|Marcos Bolados/A/29/70|Javier Correa/A/34/73'],
-  ['UCH', 'Universidad de Chile', 'UCH', 'Nacional Julio Martínez', 48665, 82, '#0a3a8c', '#d50000',
-    'Gabriel Castellón/P/32/72|Cristopher Toselli/P/37/70|Franco Calderón/D/27/71|Matías Zaldivia/D/34/71|Fabián Hormazábal/D/29/71|Marcelo Morales/D/24/71|Charles Aránguiz/M/37/73|Israel Poblete/M/30/71|Javier Altamirano/M/26/72|Marcelo Díaz/M/39/70|Lucas Assadi/M/22/73|Matías Sepúlveda/A/28/72|Maximiliano Guerrero/A/25/71|Rodrigo Contreras/A/30/72|Leandro Fernández/A/34/73|Lucas Di Yorio/A/29/71|Nicolás Guerra/A/26/70|Eduardo Vargas/A/36/71'],
-  ['UCA', 'Universidad Católica', 'UC', 'Claro Arena', 20249, 78, '#ffffff', '#0a3a8c',
-    'Vicente Bernedo/P/24/70|Eugenio Mena/D/37/69|Branco Ampuero/D/32/70|Daniel González/D/23/71|Gary Medel/D/38/71|Cristian Cuevas/D/31/69|Agustín Farías/M/37/69|Jhojan Valencia/M/29/70|Alfred Canales/M/25/71|Matías Palavecino/M/34/72|Justo Giani/A/26/71|Clemente Montes/A/25/71|Diego Valencia/A/26/71|Fernando Zampedri/A/38/75'],
-  ['COQ', 'Coquimbo Unido', 'COQ', 'Francisco Sánchez Rumoroso', 18750, 72, '#f7c600', '#111111', 'Diego Sánchez/P/38/70|Cecilio Waterman/A/34/70'],
-  ['PAL', 'Palestino', 'PAL', 'Municipal de La Cisterna', 12000, 68, '#1b7a2f', '#d50000', 'Sebastián Pérez/P/35/70|Fernando Cornejo/M/30/69|Joe Abrigo/M/30/70|Junior Arias/A/32/70'],
-  ['OHI', 'O\'Higgins', 'OHI', 'El Teniente', 16000, 68, '#5fb0e8', '#ffffff', 'Omar Carabalí/P/28/70|Bryan Rabello/M/31/70|Martín Sarrafiore/M/28/69|Arnaldo Castillo/A/30/70'],
-  ['AUD', 'Audax Italiano', 'AUD', 'Bicentenario La Florida', 12000, 64, '#1b7a2f', '#ffffff', 'Tomás Ahumada/P/26/68|Ignacio Jeraldino/A/30/69'],
-  ['EVE', 'Everton de Viña del Mar', 'EVE', 'Sausalito', 22360, 64, '#0a3a8c', '#f7c600', 'Ignacio González/P/35/68'],
-  ['HUA', 'Huachipato', 'HUA', 'Huachipato-CAP', 10500, 66, '#0a3a8c', '#111111', 'Cris Martínez/A/30/70'],
-  ['CBS', 'Cobresal', 'CBS', 'El Cobre', 12000, 62, '#ff6f00', '#ffffff', 'Alejandro Santander/P/28/68'],
-  ['UES', 'Unión Española', 'UES', 'Santa Laura', 19000, 63, '#d50000', '#f7c600', ''],
-  ['NUB', 'Ñublense', 'ÑUB', 'Nelson Oyarzún', 12000, 62, '#d50000', '#ffffff', ''],
-  ['IQU', 'Deportes Iquique', 'IQU', 'Tierra de Campeones', 13000, 60, '#5fb0e8', '#ffffff', ''],
-  ['SER', 'Deportes La Serena', 'SER', 'La Portada', 18000, 60, '#d50000', '#ffffff', ''],
-  ['LIM', 'Deportes Limache', 'LIM', 'Lucio Fariña', 5000, 57, '#d50000', '#ffffff', ''],
-  ['ULC', 'Unión La Calera', 'ULC', 'Nicolás Chahuán', 9200, 60, '#d50000', '#ffffff', ''],
-];
-
-DT.TEAMS.COL = [
-  ['NAL', 'Atlético Nacional', 'NAL', 'Atanasio Girardot', 40943, 84, '#0b6b3a', '#ffffff',
-    'David Ospina/P/37/74|Harlen Castillo/P/28/70|Andrés Román/D/30/71|William Tesillo/D/36/70|Simón García/D/22/70|Jorman Campuzano/M/29/71|Matheus Uribe/M/35/72|Edwin Cardona/M/33/74|Marino Hinestroza/A/23/74|Alfredo Morelos/A/30/73|Dairon Asprilla/A/34/71'],
-  ['MIL', 'Millonarios', 'MIL', 'El Campín', 36343, 81, '#0a3a8c', '#ffffff',
-    'Álvaro Montero/P/31/73|Diego Novoa/P/37/70|Andrés Llinás/D/28/71|Jorge Arias/D/33/70|Danovis Banguero/D/34/69|Daniel Cataño/M/33/71|David Mackalister Silva/M/39/72|Daniel Ruiz/M/24/71|Leonardo Castro/A/34/72|Santiago Giordana/A/30/71|Radamel Falcao/A/40/70'],
-  ['AME', 'América de Cali', 'AME', 'Pascual Guerrero', 38000, 79, '#d50000', '#ffffff',
-    'Jorge Soto/P/32/70|Rafael Carrascal/M/33/70|Cristian Barrios/A/28/71|Rodrigo Holgado/A/30/72|Adrián Ramos/A/40/69'],
-  ['CAL', 'Deportivo Cali', 'CAL', 'Deportivo Cali', 42000, 72, '#0b6b3a', '#ffffff', ''],
-  ['JUN', 'Junior de Barranquilla', 'JUN', 'Metropolitano', 46692, 78, '#d50000', '#ffffff',
-    'Didier Moreno/M/34/71|Yimmi Chará/M/35/71|Carlos Bacca/A/39/72|Guillermo Paiva/A/28/71|Teófilo Gutiérrez/A/41/68'],
-  ['SFE', 'Independiente Santa Fe', 'SFE', 'El Campín', 36343, 77, '#d50000', '#ffffff',
-    'Andrés Mosquera Marmolejo/P/34/71|Daniel Torres/M/36/70|Hugo Rodallega/A/40/70'],
-  ['DIM', 'Independiente Medellín', 'DIM', 'Atanasio Girardot', 40943, 76, '#d50000', '#0a3a8c',
-    'Andrés Cadavid/D/40/68|Brayan León/A/26/71|Francisco Fydriszewski/A/33/71'],
-  ['ONC', 'Once Caldas', 'ONC', 'Palogrande', 31611, 71, '#ffffff', '#111111', 'Dayro Moreno/A/40/71'],
-  ['TOL', 'Deportes Tolima', 'TOL', 'Manuel Murillo Toro', 28100, 73, '#7a1c2c', '#f7c600', 'Yeison Guzmán/M/27/71'],
-  ['BUC', 'Atlético Bucaramanga', 'BUC', 'Alfonso López', 25000, 70, '#f7c600', '#0b6b3a', ''],
-  ['PER', 'Deportivo Pereira', 'PER', 'Hernán Ramírez Villegas', 30297, 66, '#d50000', '#f7c600', ''],
-  ['ENV', 'Envigado', 'ENV', 'Polideportivo Sur', 11000, 60, '#ff6f00', '#0b6b3a', ''],
-  ['ALI', 'Alianza FC', 'ALI', 'Armando Maestre Pavajeau', 11000, 60, '#0a3a8c', '#ffffff', ''],
-  ['AGU', 'Águilas Doradas', 'AGU', 'Alberto Grisales', 14000, 61, '#f7c600', '#111111', ''],
-  ['FCE', 'Fortaleza CEIF', 'FOR', 'Metropolitano de Techo', 8000, 60, '#111111', '#f7c600', ''],
-  ['CHI', 'Boyacá Chicó', 'CHI', 'La Independencia', 20000, 58, '#0a3a8c', '#f7c600', ''],
-  ['IBO', 'Internacional de Bogotá', 'IBO', 'Metropolitano de Techo', 8000, 58, '#d50000', '#ffffff', ''],
-  ['LLA', 'Llaneros', 'LLA', 'Bello Horizonte', 15000, 57, '#d50000', '#f7c600', ''],
-  ['UMA', 'Unión Magdalena', 'UMA', 'Sierra Nevada', 16000, 62, '#0a3a8c', '#d50000', ''],
-  ['PAS', 'Deportivo Pasto', 'PAS', 'Departamental Libertad', 20000, 63, '#d50000', '#0a3a8c', ''],
-];
-
-DT.TEAMS.PAR = [
-  ['OLI', 'Olimpia', 'OLI', 'Manuel Ferreira', 25000, 79, '#ffffff', '#111111',
-    'Gastón Olveira/P/32/71|Richard Ortiz/M/36/71|Alejandro Silva/M/36/70|Derlis González/A/32/72'],
-  ['CCP', 'Cerro Porteño', 'CCP', 'La Nueva Olla', 45000, 80, '#0a3a8c', '#d50000',
-    'Alexis Martín Arias/P/33/71|Federico Carrizo/M/34/72|Juan Manuel Iturbe/A/32/71|Cecilio Domínguez/A/31/72'],
-  ['LIB', 'Libertad', 'LIB', 'Dr. Nicolás Leoz', 10000, 77, '#111111', '#ffffff',
-    'Rodrigo Morínigo/P/27/70|Lorenzo Melgarejo/A/35/71|Héctor Villalba/A/31/71|Óscar Cardozo/A/43/67'],
-  ['GUA', 'Guaraní', 'GUA', 'Rogelio Livieres', 8000, 69, '#f7c600', '#111111', ''],
-  ['NAC', 'Nacional (PAR)', 'NAC', 'Arsenio Erico', 4500, 65, '#ffffff', '#0a3a8c', ''],
-  ['LUQ', 'Sportivo Luqueño', 'LUQ', 'Feliciano Cáceres', 24000, 64, '#0a3a8c', '#f7c600', ''],
-  ['AME', 'Sportivo Ameliano', 'AME', 'José Tomás Silva', 5000, 61, '#0a3a8c', '#ffffff', ''],
-  ['GCA', 'General Caballero JLM', 'GCA', 'Ka\'arendy', 5000, 60, '#d50000', '#ffffff', ''],
-  ['DMA', '2 de Mayo', '2DM', 'Río Parapití', 25000, 60, '#111111', '#f7c600', ''],
-  ['TRI', 'Sportivo Trinidense', 'TRI', 'Martín Torres', 3000, 58, '#d50000', '#ffffff', ''],
-  ['REC', 'Recoleta', 'REC', 'Ricardo Gregor', 3000, 57, '#d50000', '#ffffff', ''],
-  ['SSL', 'Sportivo San Lorenzo', 'SSL', 'Gunther Vogel', 5000, 57, '#d50000', '#ffffff', ''],
-];
-
-DT.TEAMS.PER = [
-  ['UNI', 'Universitario', 'U', 'Monumental', 80093, 82, '#f5e6c8', '#a51e1e',
-    'Sebastián Britos/P/36/71|Aldo Corzo/D/37/70|Williams Riveros/D/33/71|Matías Di Benedetto/D/32/70|Rodrigo Ureña/M/32/70|Martín Pérez Guedes/M/34/70|Jairo Concha/M/27/71|Andy Polo/M/31/71|Edison Flores/A/32/71|Alex Valera/A/29/72|José Rivera/A/28/70'],
-  ['ALI', 'Alianza Lima', 'ALI', 'Alejandro Villanueva', 35000, 82, '#0a3a8c', '#ffffff',
-    'Guillermo Viscarra/P/32/71|Carlos Zambrano/D/36/71|Renzo Garcés/D/30/70|Jesús Castillo/M/24/70|Sergio Peña/M/30/72|Pablo Ceppelini/M/34/70|Kevin Quevedo/A/28/70|Gaspar Gentile/A/30/70|Alan Cantero/A/26/70|Hernán Barcos/A/41/70|Paolo Guerrero/A/42/68'],
-  ['SCR', 'Sporting Cristal', 'SCR', 'Alberto Gallardo', 11600, 80, '#5fb0e8', '#ffffff',
-    'Diego Enríquez/P/25/70|Yoshimar Yotún/M/35/72|Gustavo Cazonatti/M/30/70|Irven Ávila/A/35/69|Martín Cauteruccio/A/38/71'],
-  ['MEL', 'Melgar', 'MEL', 'Monumental de la UNSA', 40370, 72, '#d50000', '#111111', 'Bernardo Cuesta/A/37/70'],
-  ['CIE', 'Cienciano', 'CIE', 'Inca Garcilaso de la Vega', 45000, 70, '#d50000', '#ffffff', ''],
-  ['CUS', 'Cusco FC', 'CUS', 'Inca Garcilaso de la Vega', 45000, 66, '#f7c600', '#111111', ''],
-  ['HUA', 'Sport Huancayo', 'SHU', 'Estadio Huancayo', 20000, 64, '#d50000', '#ffffff', ''],
-  ['ADT', 'ADT de Tarma', 'ADT', 'Unión Tarma', 9000, 62, '#5fb0e8', '#ffffff', ''],
-  ['AAT', 'Alianza Atlético', 'AAT', 'Campeones del 36', 8000, 62, '#ffffff', '#0a3a8c', ''],
-  ['GRA', 'Atlético Grau', 'GRA', 'Campeones del 36', 8000, 62, '#f7c600', '#ffffff', ''],
-  ['GAR', 'Deportivo Garcilaso', 'GAR', 'Inca Garcilaso de la Vega', 45000, 62, '#5fb0e8', '#ffffff', ''],
-  ['CUN', 'Comerciantes Unidos', 'COM', 'Juan Maldonado Gamarra', 12000, 58, '#5fb0e8', '#ffffff', ''],
-  ['UTC', 'UTC Cajamarca', 'UTC', 'Héroes de San Ramón', 18000, 58, '#d50000', '#ffffff', ''],
-  ['CHK', 'Los Chankas', 'CHK', 'Los Chankas', 10000, 58, '#d50000', '#ffffff', ''],
-  ['SBO', 'Sport Boys', 'SBO', 'Miguel Grau', 17000, 64, '#ff69b4', '#111111', ''],
-  ['JPC', 'Juan Pablo II College', 'JPII', 'Juan Pablo II', 5000, 56, '#f7c600', '#0a3a8c', ''],
-  ['AYA', 'Ayacucho FC', 'AYA', 'Ciudad de Cumaná', 15000, 58, '#ff6f00', '#ffffff', ''],
-  ['AUN', 'Alianza Universidad', 'AUN', 'Heraclio Tapia', 15000, 56, '#0a3a8c', '#f7c600', ''],
-];
-
-DT.TEAMS.ECU = [
-  ['IDV', 'Independiente del Valle', 'IDV', 'Banco Guayaquil', 12000, 82, '#111111', '#0a3a8c',
-    'Moisés Ramírez/P/25/72|Lorenzo Faravelli/M/32/72|Junior Sornoza/M/31/72|Claudio Spinelli/A/28/71'],
-  ['LDU', 'Liga de Quito', 'LDU', 'Rodrigo Paz Delgado', 41575, 82, '#ffffff', '#d50000',
-    'Gonzalo Valle/P/29/72|Ricardo Adé/D/35/71|Leonel Quiñónez/D/32/70|Alexander Alvarado/M/26/72|Gabriel Villamil/M/24/72|Alex Arce/A/30/72|Jeison Medina/A/31/71|Lisandro Alzugaray/A/35/70|Bryan Ramírez/A/28/70'],
-  ['BSC', 'Barcelona SC', 'BSC', 'Monumental Banco Pichincha', 57267, 80, '#f7c600', '#d50000',
-    'José Contreras/P/32/70|Leonai Souza/M/30/70|Janner Corozo/A/30/71|Octavio Rivero/A/33/71|Felipe Caicedo/A/37/69'],
-  ['EME', 'Emelec', 'EME', 'George Capwell', 40000, 74, '#0a3a8c', '#ffffff', 'Pedro Ortiz/P/35/69'],
-  ['AUC', 'Aucas', 'AUC', 'Gonzalo Pozo Ripalda', 18800, 68, '#f7c600', '#d50000', ''],
-  ['UCQ', 'Universidad Católica (ECU)', 'UCQ', 'Olímpico Atahualpa', 35000, 67, '#5fb0e8', '#ffffff', ''],
-  ['NAC', 'El Nacional', 'NAC', 'Olímpico Atahualpa', 35000, 66, '#d50000', '#0a3a8c', ''],
-  ['CUE', 'Deportivo Cuenca', 'CUE', 'Alejandro Serrano Aguilar', 16540, 64, '#d50000', '#111111', ''],
-  ['ORE', 'Orense', 'ORE', '9 de Mayo', 16000, 65, '#0b6b3a', '#ffffff', ''],
-  ['MUS', 'Mushuc Runa', 'MUS', 'Echaleche', 8000, 62, '#d50000', '#ffffff', ''],
-  ['DEL', 'Delfín', 'DEL', 'Jocay', 17000, 64, '#f7c600', '#0a3a8c', ''],
-  ['TEC', 'Técnico Universitario', 'TEC', 'Bellavista', 16000, 60, '#d50000', '#ffffff', ''],
-  ['MAC', 'Macará', 'MAC', 'Bellavista', 16000, 62, '#5fb0e8', '#ffffff', ''],
-  ['LIB', 'Libertad FC', 'LIB', 'Reina del Cisne', 14935, 58, '#d50000', '#ffffff', ''],
-  ['MAN', 'Manta FC', 'MAN', 'Jocay', 17000, 58, '#5fb0e8', '#ffffff', ''],
-  ['VIN', 'Vinotinto', 'VIN', 'Olímpico Atahualpa', 35000, 56, '#7a1c2c', '#ffffff', ''],
-];
-
-DT.TEAMS.BOL = [
-  ['BOL', 'Bolívar', 'BOL', 'Hernando Siles', 41143, 77, '#5fb0e8', '#ffffff',
-    'Carlos Lampe/P/39/70|Ramiro Vaca/M/26/71|Carmelo Algarañaz/A/29/70|Patricio Rodríguez/A/36/70'],
-  ['STR', 'The Strongest', 'TSG', 'Hernando Siles', 41143, 72, '#f7c600', '#111111', ''],
-  ['ALW', 'Always Ready', 'ALW', 'Municipal de El Alto', 25000, 68, '#d50000', '#ffffff', ''],
-  ['BLO', 'Blooming', 'BLO', 'Tahuichi Aguilera', 38000, 66, '#5fb0e8', '#ffffff', ''],
-  ['ORI', 'Oriente Petrolero', 'ORI', 'Tahuichi Aguilera', 38000, 66, '#0b6b3a', '#ffffff', ''],
-  ['WIL', 'Jorge Wilstermann', 'WIL', 'Félix Capriles', 32000, 66, '#d50000', '#0a3a8c', ''],
-  ['AUR', 'Aurora', 'AUR', 'Félix Capriles', 32000, 60, '#5fb0e8', '#ffffff', ''],
-  ['NPO', 'Nacional Potosí', 'NPO', 'Víctor Agustín Ugarte', 32105, 60, '#5fb0e8', '#ffffff', ''],
-  ['TOM', 'Real Tomayapo', 'TOM', 'IV Centenario', 15000, 56, '#d50000', '#ffffff', ''],
-  ['GUB', 'Guabirá', 'GUB', 'Gilberto Parada', 13000, 58, '#d50000', '#ffffff', ''],
-  ['SAB', 'San Antonio Bulo Bulo', 'SAB', 'Carlos Villegas', 8000, 58, '#0b6b3a', '#ffffff', ''],
-  ['GVS', 'GV San José', 'SJO', 'Jesús Bermúdez', 30000, 58, '#0a3a8c', '#ffffff', ''],
-  ['ROR', 'Real Oruro', 'ROR', 'Jesús Bermúdez', 30000, 56, '#0a3a8c', '#ffffff', ''],
-  ['UVI', 'Universitario de Vinto', 'UVI', 'Municipal de Vinto', 6000, 56, '#d50000', '#ffffff', ''],
-  ['IPE', 'Independiente Petrolero', 'IPE', 'Olímpico Patria', 30700, 58, '#f7c600', '#d50000', ''],
-  ['ABB', 'Academia del Balompié Boliviano', 'ABB', 'Municipal de Sacaba', 5000, 56, '#0a3a8c', '#ffffff', ''],
-];
-
-DT.TEAMS.VEN = [
-  ['TAC', 'Deportivo Táchira', 'TÁC', 'Pueblo Nuevo', 38755, 67, '#f7c600', '#111111', ''],
-  ['CAR', 'Caracas FC', 'CAR', 'Olímpico de la UCV', 23940, 67, '#d50000', '#ffffff', ''],
-  ['CBO', 'Carabobo FC', 'CBO', 'Misael Delgado', 10000, 63, '#7a1c2c', '#ffffff', ''],
-  ['UCV', 'Universidad Central', 'UCV', 'Olímpico de la UCV', 23940, 63, '#0a3a8c', '#ffffff', ''],
-  ['MON', 'Monagas SC', 'MON', 'Monumental de Maturín', 51796, 61, '#0a3a8c', '#d50000', ''],
-  ['MET', 'Metropolitanos', 'MET', 'Olímpico de la UCV', 23940, 58, '#5e35b1', '#ffffff', ''],
-  ['APC', 'Academia Puerto Cabello', 'APC', 'La Bombonera de Puerto Cabello', 7500, 61, '#0b6b3a', '#ffffff', ''],
-  ['LGU', 'Deportivo La Guaira', 'LGU', 'Olímpico de la UCV', 23940, 61, '#ff6f00', '#0a3a8c', ''],
-  ['POR', 'Portuguesa FC', 'POR', 'General José Antonio Páez', 18000, 56, '#d50000', '#111111', ''],
-  ['ZAM', 'Zamora FC', 'ZAM', 'Agustín Tovar', 29800, 59, '#111111', '#ffffff', ''],
-  ['EME', 'Estudiantes de Mérida', 'EDM', 'Metropolitano de Mérida', 42000, 57, '#d50000', '#ffffff', ''],
-  ['RAY', 'Rayo Zuliano', 'RAY', 'Pachencho Romero', 40800, 56, '#0a3a8c', '#ffffff', ''],
-  ['ANG', 'Angostura FC', 'ANG', 'Ricardo Tulio Maya', 8000, 54, '#0b6b3a', '#f7c600', ''],
-  ['ANZ', 'Deportivo Anzoátegui', 'ANZ', 'José Antonio Anzoátegui', 40000, 56, '#d50000', '#0a3a8c', ''],
-];
+// ---- src/data/crests.js ----
+// Escudos reales de los clubes (football-logos.cc, catálogo de septiembre de 2026).
+// Se cargan desde internet; sin conexión se usa el escudo dibujado con los colores del club.
+DT.CREST_BASE = 'https://assets.football-logos.cc/logos/';
+DT.CREST_COUNTRY = {'ARG': 'argentina', 'BRA': 'brazil', 'URU': 'uruguay', 'CHI': 'chile', 'COL': 'colombia', 'PAR': 'paraguay', 'PER': 'peru', 'ECU': 'ecuador', 'BOL': 'bolivia', 'VEN': 'venezuela'};
+DT.CRESTS = {
+  ARG_RIV: 'river-plate.01acb6fc',
+  ARG_BOC: 'boca-juniors.ea01d4a3',
+  ARG_RAC: 'racing-club.b31447c6',
+  ARG_IND: 'independiente.fd959dab',
+  ARG_SLO: 'san-lorenzo-de-almagro.55e6a0bf',
+  ARG_VEL: 'velez-sarsfield.1f962690',
+  ARG_EST: 'estudiantes-de-la-plata.51f54156',
+  ARG_GLP: 'gimnasia-lp.953a0a50',
+  ARG_RCE: 'rosario-central.028c4599',
+  ARG_NOB: 'newells-old-boys.b60acb78',
+  ARG_TAL: 'talleres.d1c887d7',
+  ARG_BEL: 'belgrano.6b246ab5',
+  ARG_INS: 'instituto-cordoba.186b2667',
+  ARG_LAN: 'lanus.479fce96',
+  ARG_BAN: 'banfield.b34d0f03',
+  ARG_DYJ: 'defensa-y-justicia.1a8311a2',
+  ARG_ARJ: 'argeninos-juniors.b2780d67',
+  ARG_PLA: 'club-atletico-platanense.cb5c762c',
+  ARG_TIG: 'tigre.c5af188f',
+  ARG_IRV: 'independiente-rivadavia.55b639a5',
+  ARG_UNI: 'union.4d3d12f2',
+  ARG_ATU: 'atletico-tucuman.10ddf6b8',
+  ARG_CCO: 'central-cordoba.2ebcc2c9',
+  ARG_SAR: 'sarmiento.cce0f83b',
+  ARG_BAR: 'barracas-central.20586205',
+  ARG_RIE: 'deportivo-riestra.b03ac726',
+  ARG_ALD: 'aldosivi.6a2fb242',
+  ARG_HUR: 'ca-huracan.97fa4461',
+  ARG_GIM: 'gimnasia-y-esgrima.841ab8fe',
+  ARG_ERC: 'estudiantes-de-rio-cuarto.93c28336',
+  ARG_GOD: 'godoy-cruz.fb265467',
+  ARG_SMS: 'san-martin-san-juan.1da5bb39',
+  ARG_ALM: 'almagro.4ec97b42',
+  ARG_ALV: 'alvarado.3c7b8015',
+  ARG_ARS: 'arsenal-de-sarandi.eae57217',
+  ARG_ALB: 'all-boys.13643ea9',
+  ARG_ATL: 'atletico-atlanta.92f4aacb',
+  ARG_COG: 'colegiales.dc0cfc45',
+  ARG_MAD: 'deportivo-madryn.30c14e40',
+  ARG_MAI: 'deportivo-maipu.21fa1e4a',
+  ARG_FER: 'ferro-carril-oeste.d4d6b6cc',
+  ARG_GYT: 'gimnasia-y-tiro.ba950f5e',
+  ARG_GUE: 'guemes.860bd3bd',
+  ARG_LAD: 'los-andes.459b6614',
+  ARG_PAT: 'patronato.c3f5b2a1',
+  ARG_QUI: 'quilmes.33acc51d',
+  ARG_RAF: 'racing.4fb4d130',
+  ARG_SMT: 'san-martin-tucuman.300635a1',
+  ARG_SMI: 'san-miguel.d5956b30',
+  ARG_TSU: 'tristan-suarez.e5100087',
+  ARG_EBA: 'estudiantes-de-buenos-aires.4cf99d13',
+  ARG_MOR: 'deportivo-moron.b187b2e0',
+  ARG_GJU: 'gimnasia-de-jujuy.b4f39e70',
+  ARG_TEM: 'temperley.dae6515f',
+  ARG_AGR: 'agropecuario-argentino.eac2abf6',
+  ARG_CFE: 'chaco-for-ever.7de99c10',
+  ARG_CHA: 'chacarita-juniors.c054d4a4',
+  ARG_DEB: 'defensores-de-belgrano.65718377',
+  ARG_NCH: 'nueva-chicago.33b88f77',
+  ARG_STE: 'san-telmo.1a51ea75',
+  ARG_MIT: 'mitre-santiago-del-estero.014c8395',
+  ARG_ABR: 'almirante-brown.d4e65053',
+  ARG_CNO: 'central-norte.43901b4a',
+  ARG_COL: 'colon-santa-fe.c7a7bb17',
+  ARG_TRE: 'talleres-remedios-de-escalada.40f831e6',
+  ARG_DUN: 'defensores-unidos.5eaac10c',
+  BRA_FLA: 'flamengo.0ec2cd2d',
+  BRA_PAL: 'palmeiras.cd04fee3',
+  BRA_CRU: 'cruzeiro.553140bb',
+  BRA_MIR: 'mirassol.2e37e77a',
+  BRA_FLU: 'fluminense.7b0d1eec',
+  BRA_BOT: 'botafogo.8e46676a',
+  BRA_BAH: 'bahia.c8e25c26',
+  BRA_SAO: 'sao-paulo.7e007a6e',
+  BRA_GRE: 'gremio.4ad82819',
+  BRA_RBB: 'rb-bragantino.4d50223b',
+  BRA_CAM: 'atletico-mineiro.da10887f',
+  BRA_SAN: 'santos.f310d725',
+  BRA_COR: 'corinthians.c5a2d838',
+  BRA_VAS: 'vasco-da-gama.2d89e86d',
+  BRA_VIT: 'vitoria.0c401ef5',
+  BRA_INT: 'internacional.85266e54',
+  BRA_CFC: 'coritiba.2ee6cc01',
+  BRA_CAP: 'athletico-paranaense.70f7d27b',
+  BRA_CHP: 'chapecoense.d48c11b9',
+  BRA_REM: 'clube-do-remo.cdcb5e8e',
+  BRA_CEA: 'ceara.a0b85076',
+  BRA_FOR: 'fortaleza.a7fb9de2',
+  BRA_JUV: 'juventude.babee861',
+  BRA_SPO: 'sport-recife.0ab1985b',
+  BRA_AMG: 'america-mineiro.b4e8ac47',
+  BRA_ATH: 'athletic.eea54312',
+  BRA_ACG: 'atletico-goianiense.740b8b46',
+  BRA_AVA: 'avai.318281b3',
+  BRA_BSP: 'botafogo-sp.2d410d63',
+  BRA_CRB: 'crb.bbe71d3c',
+  BRA_CRI: 'criciuma.10d1303b',
+  BRA_CUI: 'cuiaba.c92d0c6a',
+  BRA_GOI: 'goias.a0bd4b0b',
+  BRA_LON: 'londrina.737e215d',
+  BRA_NAU: 'nautico.fe7d5b50',
+  BRA_NOV: 'novorizontino.dfa56741',
+  BRA_OPE: 'operario-ferroviario.d038432b',
+  BRA_PON: 'ponte-preta.a461a44c',
+  BRA_SBE: 'sao-bernardo.ecfbbad1',
+  BRA_VIL: 'vila-nova.1b978247',
+  URU_PEN: 'penarol.5842be73',
+  URU_NAC: 'nacional.923b4999',
+  URU_DEF: 'defensor-sporting.43780218',
+  URU_LIV: 'liverpool.97e6323e',
+  URU_DAN: 'danubio.7a4225da',
+  URU_WAN: 'montevideo-wanderers.28bc9ac8',
+  URU_RAC: 'racing-montevideo.fcc0788a',
+  URU_CLA: 'cerro-largo.c2344142',
+  URU_BRI: 'boston-river.8610eb3f',
+  URU_PRO: 'progreso.5fceb3a1',
+  URU_JUV: 'juventud.e067587d',
+  URU_CER: 'cerro.d53d3ee0',
+  URU_MAL: 'deportivo-maldonado.084022a0',
+  URU_CES: 'central-espanol.6256f15d',
+  URU_MCT: 'montevideo-city-torque.8b2ca0dc',
+  URU_ALB: 'albion.e46b9661',
+  URU_PLZ: 'plaza-colonia.3d1f443e',
+  URU_RIV: 'river-plate.26a49caa',
+  URU_MIR: 'miramar-misiones.f03300fe',
+  URU_ATE: 'atenas-de-san-carlos.e88c4b9b',
+  URU_CRR: 'cerrito.816fdff2',
+  URU_FEN: 'fenix.bf46de7c',
+  URU_ORI: 'oriental-de-la-paz.722a72cc',
+  URU_COL: 'colon-fc.b9d36e4e',
+  URU_REN: 'rentistas.aee1d743',
+  URU_HUR: 'huracan-fc.2c8aee7e',
+  URU_UMO: 'uruguay-montevideo.a07f7472',
+  URU_LUZ: 'la-luz.5a22cbfe',
+  URU_TAC: 'tacuarembo-fc.cc635eaf',
+  URU_PAY: 'paysandu-fc.906efe61',
+  CHI_COL: 'colo-colo.b227626f',
+  CHI_UCH: 'universidad-de-chile.1c27a967',
+  CHI_UCA: 'universidad-catolica.e7ac7e73',
+  CHI_COQ: 'coquimbo-unido.b99ba2fb',
+  CHI_PAL: 'palestino.c0f2c29d',
+  CHI_OHI: 'ohiggins.99dae7df',
+  CHI_AUD: 'audax-italiano.276a7221',
+  CHI_EVE: 'everton.ddc6305e',
+  CHI_HUA: 'huachipato.6192fcff',
+  CHI_CBS: 'cobresal.15164d5c',
+  CHI_NUB: 'nublense.cf8bdef6',
+  CHI_SER: 'la-serena.f307ab72',
+  CHI_LIM: 'deportes-limache.3cf149ba',
+  CHI_ULC: 'union-la-calera.53828fe8',
+  CHI_DCO: 'deportes-concepcion.711ea686',
+  CHI_UDC: 'universidad-de-concepcion.2777e4d5',
+  CHI_UES: 'union-espanola.97c557d0',
+  CHI_IQU: 'deportes-iquique.b44f8bb7',
+  CHI_RAN: 'rangers-de-talca.fb5855a2',
+  CHI_COB: 'cobreloa.41a684f8',
+  CHI_SWA: 'santiago-wanderers.84ecc78b',
+  CHI_ANT: 'deportes-antofagasta.00c74d12',
+  CHI_MAG: 'magallanes.a49604a7',
+  CHI_SLQ: 'san-luis-de-quillota.4f6babba',
+  CHI_PMO: 'deportes-puerto-montt.2b67fbf9',
+  CHI_REC: 'deportes-recoleta.68afb50e',
+  CHI_SMA: 'san-marcos-de-arica.092cdd3a',
+  CHI_COP: 'deportes-copiapo.b9d861fe',
+  CHI_TEM: 'deportes-temuco.db20cf8e',
+  CHI_CUR: 'curico-unido.4de2b584',
+  CHI_USF: 'union-san-felipe.740ced38',
+  CHI_SCZ: 'deportes-santa-cruz.7905631d',
+  COL_NAL: 'atletico-nacional.e717dfa0',
+  COL_MIL: 'millonarios.29aae381',
+  COL_AME: 'america-de-cali.6f5047b4',
+  COL_CAL: 'deportivo-cali.21f1531e',
+  COL_JUN: 'atletico-junior.b791a857',
+  COL_SFE: 'independiente-santa-fe.af6a136a',
+  COL_DIM: 'independiente-medellin.27e5d102',
+  COL_ONC: 'once-caldas.f13e8171',
+  COL_TOL: 'deportes-tolima.ab6354c0',
+  COL_BUC: 'bucaramanga.c90fbdcd',
+  COL_PER: 'deportivo-pereira.51c3d029',
+  COL_ALI: 'alianza-valledupar.41befd4c',
+  COL_AGU: 'aguilas-doradas.4a4c9d5b',
+  COL_FCE: 'fortaleza-ceif.1b0c08ee',
+  COL_CHI: 'boyaca-chico.94c8f1b4',
+  COL_IBO: 'internacional-de-bogota.d891726d',
+  COL_LLA: 'llaneros.b5fb0815',
+  COL_PAS: 'deportivo-pasto.fb65a36a',
+  COL_CUC: 'cucuta-deportivo.d329551a',
+  COL_JAG: 'jaguares-de-cordoba.e8e8458c',
+  COL_ENV: 'envigado.7fe75f7b',
+  COL_UMA: 'union-magdalena.ff6a6cf2',
+  COL_HUI: 'atletico-huila.255c0043',
+  PAR_OLI: 'olimpia.a00877c6',
+  PAR_CCP: 'cerro-porteno.3ea71ad3',
+  PAR_LIB: 'libertad.920b8a65',
+  PAR_GUA: 'guarani.cec466f6',
+  PAR_NAC: 'nacional.67c898ab',
+  PAR_LUQ: 'sportivo-luqueno.9825d679',
+  PAR_AME: 'sportivo-ameliano.1ce508db',
+  PAR_DMA: '2-de-mayo.4ee8ab1c',
+  PAR_TRI: 'trinidense.4358a921',
+  PAR_REC: 'deportivo-recoleta.ee13816e',
+  PAR_SSL: 'sportivo-san-lorenzo.06dd730a',
+  PAR_RUB: 'rubio-nu.07519ad7',
+  PAR_GCA: 'general-caballero-jlm.53ec5d3b',
+  PER_UNI: 'universitario.44477a49',
+  PER_ALI: 'alianza-lima.bf26e02b',
+  PER_SCR: 'sporting-cristal.62530aec',
+  PER_MEL: 'melgar.8445d24d',
+  PER_CIE: 'cienciano-del-cusco.335bfcda',
+  PER_CUS: 'cusco.1a6f0822',
+  PER_HUA: 'sport-huancayo.ec8d0e0f',
+  PER_ADT: 'adt.bf42b3dd',
+  PER_AAT: 'alianza-atletico.df5da276',
+  PER_GRA: 'atletico-grau.606e575d',
+  PER_GAR: 'deportivo-garcilaso.537f12aa',
+  PER_CUN: 'comerciantes-unidos.4e8c54ba',
+  PER_UTC: 'utc.4236f5c2',
+  PER_CHK: 'los-chankas.6348c48d',
+  PER_SBO: 'sport-boys.aba30a9d',
+  PER_JPC: 'juan-pablo-ii.f69887e7',
+  PER_MOQ: 'deportivo-moquegua.d2f04643',
+  PER_CAJ: 'fc-cajamarca.d53aef82',
+  PER_AYA: 'ayacucho.edd15743',
+  PER_AUN: 'alianza-universidad.8db5128f',
+  PER_UCO: 'union-comercio.f24987cd',
+  ECU_IDV: 'independiente-del-valle.0fd5cb37',
+  ECU_BSC: 'barcelona-sc.3d0a5e2b',
+  ECU_EME: 'emelec.f7cbb804',
+  ECU_AUC: 'aucas.d7f0ecb6',
+  ECU_UCQ: 'universidad-catolica-quito.56d48891',
+  ECU_CUE: 'deportivo-cuenca.b8a46aa6',
+  ECU_ORE: 'orense.9564cb5b',
+  ECU_MUS: 'mushuc-runa.6ff8f21b',
+  ECU_DEL: 'delfin.4e5fd46f',
+  ECU_TEC: 'tecnico-universitario.9a577725',
+  ECU_MAC: 'macara.1551613e',
+  ECU_LIB: 'libertad.ca9ff0e1',
+  ECU_MAN: 'manta-fc.10bb9839',
+  ECU_GCI: 'guayaquil-city.d9847262',
+  ECU_LDN: 'leones-del-norte.8d20bd4d',
+  ECU_NAC: 'el-nacional.b1191fdd',
+  ECU_VIN: 'vinotinto.b9272ab9',
+  BOL_BOL: 'bolivar.030159a9',
+  BOL_STR: 'the-strongest.d0cfb256',
+  BOL_ALW: 'always-ready.80eb3e6b',
+  BOL_BLO: 'blooming.25cb938d',
+  BOL_ORI: 'oriente-petrolero.dfbb9602',
+  BOL_WIL: 'jorge-wilstermann.fa45c553',
+  BOL_AUR: 'aurora.17b9584b',
+  BOL_NPO: 'nacional-potosi.126f6c6e',
+  BOL_TOM: 'real-tomayapo.78b09a55',
+  BOL_GUB: 'guabira.66827a4c',
+  BOL_SAB: 'san-antonio-bulo-bulo.a4d539f6',
+  BOL_GVS: 'gv-san-jose.7e768039',
+  BOL_ROR: 'real-oruro.935ffade',
+  BOL_UVI: 'universitario-de-vinto.878ad2a0',
+  BOL_IPE: 'independiente-petrolero.5dcb4014',
+  BOL_ABB: 'abb.6f0f79dd',
+  VEN_TAC: 'deportivo-tachira.875cf12a',
+  VEN_CAR: 'caracas.0cdab12b',
+  VEN_CBO: 'carabobo.afbd03f4',
+  VEN_UCV: 'universidad-central.da9a3446',
+  VEN_MON: 'monagas.5a36d16b',
+  VEN_MET: 'metropolitanos.f8c930fd',
+  VEN_APC: 'academia-puerto-cabello.42baa9bd',
+  VEN_LGU: 'deportivo-la-guaira.5ac33f81',
+  VEN_POR: 'portuguesa.3ad79760',
+  VEN_ZAM: 'zamora.a92c4827',
+  VEN_EME: 'estudiantes-merida.831cdf02',
+  VEN_RAY: 'rayo-zuliano.b092031c',
+  VEN_TRU: 'trujillanos-fc.898294aa',
+  VEN_AAN: 'academia-anzoategui.6a8b87c4',
+  VEN_MIN: 'mineros-de-guayana.228db831',
+};
 
 // ---- src/game/players.js ----
 // Jugadores: creación, valor de mercado, sueldos, evolución y juveniles.
@@ -1015,7 +1423,7 @@ DT.E = (function () {
   E.tvAnnual = (t) => {
     const C = DT.COUNTRIES[t.cc];
     const base = C.tv * 1e6 * (0.3 + 0.35 * Math.pow(E.mi(t), 0.4));
-    return t.lg ? base : base * 0.25; // fuera de primera cobra mucho menos
+    return t.lg ? base : base * (t.d2 ? 0.35 : 0.25); // fuera de primera cobra mucho menos
   };
   E.sponsorBase = (t) => U.round(0.45 * E.mi(t) * E.W(t) * 1e6 + 60000, 10000);
   E.merchAnnual = (t) => 0.3 * E.mi(t) * E.W(t) * 1e6 + 30000;
@@ -1240,7 +1648,7 @@ DT.E = (function () {
 
   // Cierre del ejercicio anual.
   E.closeSeason = function (t) {
-    if (!DT.isUser(t.id) && t.lg) E.aiInvest(t);
+    if (!DT.isUser(t.id) && DT.inLeague(t)) E.aiInvest(t);
     const tot = E.totals(t);
     t.fin.hist.push({ y: DT.G.year, inc: tot.inc, exp: tot.exp, cash: Math.round(t.cash), detail: JSON.parse(JSON.stringify(t.fin.cur)) });
     if (t.fin.hist.length > 12) t.fin.hist.shift();
@@ -1505,7 +1913,8 @@ DT.W = (function () {
     });
   }
 
-  function makeTeam(cc, row, inLeague) {
+  // div: 1 primera, 2 segunda, 0 sin liga profesional
+  function makeTeam(cc, row, div) {
     const [code, name, short, stad, cap, rep, c1, c2] = row;
     const C = DT.COUNTRIES[cc];
     const t = {
@@ -1513,7 +1922,8 @@ DT.W = (function () {
       n: name,
       s: short,
       cc,
-      lg: inLeague ? cc : null,
+      lg: div === 1 ? cc : null,
+      d2: div === 2 ? cc : null,
       stad,
       cap,
       rep,
@@ -1564,7 +1974,7 @@ DT.W = (function () {
     }
   };
 
-  W.newGame = function (userTeamId, managerName) {
+  W.newGame = function (userTeamId, managerName, diff) {
     DT.G = {
       v: DT.VERSION,
       year: 2026,
@@ -1584,13 +1994,14 @@ DT.W = (function () {
       holders: { LIB: 'BRA_FLA', SUD: 'ARG_LAN' },
       prevTables: {},
       abroad: [],
-      settings: { speed: 2 },
+      settings: { speed: 2, diff: diff === 'real' ? 'real' : 'arcade' },
     };
     const G = DT.G;
     for (const cc of DT.COUNTRY_ORDER) {
       const C = DT.COUNTRIES[cc];
-      for (const row of DT.TEAMS[cc]) {
-        const t = makeTeam(cc, row, true);
+      const rows = DT.TEAMS[cc].map((r) => [r, 1]).concat(((DT.TEAMS2 || {})[cc] || []).map((r) => [r, 2]));
+      for (const [row, div] of rows) {
+        const t = makeTeam(cc, row, div);
         G.teams[t.id] = t;
         for (const pd of parseSquad(row[8])) {
           const p = DT.P.create({ n: pd.n, pos: pd.pos, age: pd.age, ovr: pd.ovr, t: t.id, real: true, cy: pd.age >= 33 ? U.ri(1, 2) : U.ri(1, 4) });
@@ -1599,7 +2010,7 @@ DT.W = (function () {
         W.fillSquad(t);
       }
       for (const row of C.pool) {
-        const t = makeTeam(cc, row, false);
+        const t = makeTeam(cc, row, 0);
         G.teams[t.id] = t;
         W.fillSquad(t, { P: 3, D: 7, M: 7, A: 5 });
       }
@@ -1632,7 +2043,8 @@ DT.W = (function () {
     const old = G.user;
     G.user = tid;
     const t = G.teams[tid];
-    if (first) G.manager.rep = U.clamp(t.rep - 12, 35, 80);
+    // en modo realista el DT arranca sin nombre y tiene que hacer carrera
+    if (first) G.manager.rep = G.settings.diff === 'real' ? U.clamp(t.rep - 18, 22, 45) : U.clamp(t.rep - 12, 35, 80);
     G.manager.conf = 60;
     G.manager.clubs.push({ id: tid, n: t.n, from: G.year });
     t.xi = null;
@@ -2138,7 +2550,8 @@ DT.Board = (function () {
 
   B.leagueRank = function (team) {
     const G = DT.G;
-    const ids = Object.values(G.teams).filter((t) => t.lg === team.lg).sort((a, b) => DT.AI.rating(b) + b.rep * 0.05 - (DT.AI.rating(a) + a.rep * 0.05));
+    const div = DT.divOf(team);
+    const ids = Object.values(G.teams).filter((t) => DT.divOf(t) === div).sort((a, b) => DT.AI.rating(b) + b.rep * 0.05 - (DT.AI.rating(a) + a.rep * 0.05));
     return { rank: ids.findIndex((t) => t.id === team.id) + 1, n: ids.length };
   };
 
@@ -2146,6 +2559,14 @@ DT.Board = (function () {
     const C = DT.COUNTRIES[team.cc];
     const { rank, n } = B.leagueRank(team);
     let o;
+    if (team.d2) {
+      // segunda división: el objetivo gira alrededor del ascenso (no hay descenso)
+      if (rank <= C.rel + 1) o = { target: C.rel, text: `Ascender a ${C.league}: terminar entre los ${C.rel} primeros de la ${C.div2.name}.` };
+      else if (rank <= Math.ceil(n * 0.4)) o = { target: Math.max(C.rel + 2, 6), text: `Pelear el ascenso: terminar entre los ${Math.max(C.rel + 2, 6)} primeros.` };
+      else o = { target: Math.ceil(n / 2), text: `Terminar en la mitad de arriba de la ${C.div2.name} (top ${Math.ceil(n / 2)}).` };
+      o.rank = rank;
+      return o;
+    }
     if (rank <= 2) o = { target: 2, text: 'Pelear el campeonato: terminar entre los 2 primeros de la liga.' };
     else if (rank <= C.lib) o = { target: C.lib, text: `Clasificar a la Copa Libertadores: terminar entre los ${C.lib} primeros.` };
     else if (rank <= C.lib + C.sud) o = { target: C.lib + C.sud, text: `Clasificar a una copa internacional: terminar entre los ${C.lib + C.sud} primeros.` };
@@ -2263,7 +2684,7 @@ DT.Board = (function () {
   B.jobOffers = function (excludeId, fired) {
     const G = DT.G;
     const rep = G.manager.rep;
-    const pool = Object.values(G.teams).filter((t) => t.lg && t.id !== excludeId && t.id !== G.user);
+    const pool = Object.values(G.teams).filter((t) => DT.inLeague(t) && t.id !== excludeId && t.id !== G.user);
     const max = fired ? rep + 2 : rep + 8;
     const min = fired ? rep - 30 : rep - 6;
     let cands = pool.filter((t) => t.rep <= max && t.rep >= min);
@@ -2286,7 +2707,7 @@ DT.Board = (function () {
   };
 
   // Evaluación de fin de temporada (antes de ascensos/descensos).
-  B.seasonEnd = function (finalPos, relegated) {
+  B.seasonEnd = function (finalPos, relegated, promoted) {
     const G = DT.G;
     const M = G.manager;
     const t = DT.userTeam();
@@ -2295,6 +2716,10 @@ DT.Board = (function () {
     if (relegated) {
       M.conf = 0;
       msg = `${t.n} descendió. La directiva te despide.`;
+    } else if (promoted) {
+      M.conf = Math.min(100, M.conf + 35);
+      M.rep = Math.min(100, M.rep + 6);
+      msg = `¡Ascenso! ${t.n} terminó ${finalPos}º y vuelve a jugar en ${DT.COUNTRIES[t.cc].league}. La directiva está feliz.`;
     } else if (o && finalPos <= o.target) {
       M.conf = Math.min(100, M.conf + 25);
       M.rep = Math.min(100, M.rep + (finalPos < o.target ? 4 : 2));
@@ -2531,7 +2956,7 @@ DT.M = (function () {
     const G = DT.G;
     const p = G.players[pid];
     const me = DT.userTeam();
-    const cands = Object.values(G.teams).filter((t) => t.lg && !t.eur && t.id !== me.id && t.rep <= me.rep + 4 && t.squad.length < 32 && DT.W.teamLevel(t) <= p.ovr + 6 && t.cash > p.w * 0.5);
+    const cands = Object.values(G.teams).filter((t) => DT.inLeague(t) && !t.eur && t.id !== me.id && t.rep <= me.rep + 4 && t.squad.length < 32 && DT.W.teamLevel(t) <= p.ovr + 6 && t.cash > p.w * 0.5);
     U.shuffle(cands);
     return cands.slice(0, 3).map((t) => ({ tid: t.id, fee: U.round(DT.P.value(p) * U.rf(0, 0.06), 5000), starter: DT.W.teamLevel(t) <= p.ovr + 1 }));
   };
@@ -2604,7 +3029,7 @@ DT.M = (function () {
       if (G.week === 5 || G.week === 27) M.windowClose();
       return;
     }
-    const teams = Object.values(G.teams).filter((t) => !t.eur && t.lg);
+    const teams = Object.values(G.teams).filter((t) => !t.eur && DT.inLeague(t));
     // Ventas al exterior
     for (const t of teams) {
       if (DT.isUser(t.id)) continue;
@@ -2856,8 +3281,20 @@ DT.S = (function () {
         const w = Math.floor(1 + (r * 44) / rounds.length);
         rd.forEach(([h, a]) => addMatch({ c: comp.id, h, a, w, s: 1, st: r + 1 }));
       });
-      // Copa nacional
-      S.createCup(cc, ids);
+      // Segunda división (en los países que la tienen)
+      const ids2 = Object.values(G.teams).filter((t) => t.d2 === cc).map((t) => t.id);
+      if (C.div2 && ids2.length) {
+        const r2 = roundRobin(U.shuffle(ids2.slice()), C.div2.format === 2);
+        const c2 = { id: 'B_' + cc, type: 'league', div: 2, cc, name: C.div2.name, teams: ids2, table: {}, rounds: r2.length };
+        ids2.forEach((id) => (c2.table[id] = newRow()));
+        SS.comps[c2.id] = c2;
+        r2.forEach((rd, r) => {
+          const w = Math.floor(1 + (r * 44) / r2.length);
+          rd.forEach(([h, a]) => addMatch({ c: c2.id, h, a, w, s: 1, st: r + 1 }));
+        });
+      }
+      // Copa nacional: primera y segunda división
+      S.createCup(cc, ids.concat(ids2));
     }
     // Torneos internacionales
     const qual = first ? S.initialQualifiers() : G.nextQual;
@@ -3003,7 +3440,7 @@ DT.S = (function () {
 
   function compType(match) {
     const c = match.c;
-    if (c.startsWith('L_')) return 'league';
+    if (c.startsWith('L_') || c.startsWith('B_')) return 'league';
     if (c.startsWith('C_')) return 'cup';
     return 'cont';
   }
@@ -3376,6 +3813,7 @@ DT.End = (function () {
     const finalPos = {};
     const qual = { LIB: [], SUD: [] };
     const relegatedAll = [];
+    const promotedAll = [];
     const userTeam = DT.userTeam();
 
     // Ligas
@@ -3412,6 +3850,17 @@ DT.End = (function () {
       // descensos
       const rel = order.slice(order.length - C.rel);
       relegatedAll.push(...rel.map((tid) => ({ tid, cc })));
+      // segunda división: campeón, posiciones y ascensos
+      const c2 = SS.comps['B_' + cc];
+      if (c2) {
+        const o2 = DT.S.sortTable(c2.table, c2.teams);
+        o2.forEach((tid, i) => (finalPos[tid] = i + 1));
+        G.prevTables['B_' + cc] = o2.slice();
+        DT.S.title(o2[0], c2.name);
+        hist.champs['B_' + cc] = [o2[0], G.teams[o2[0]].n];
+        o2.forEach((tid, i) => DT.E.prize(G.teams[tid], C.leaguePrize * 1e6 * 0.15 * Math.pow(1 - i / o2.length, 2), i === 0 ? `${c2.name}: campeón` : null));
+        promotedAll.push(...o2.slice(0, C.rel).map((tid) => ({ tid, cc })));
+      }
     }
     for (const id of ['LIB', 'SUD', 'REC', 'INT']) {
       const c = SS.comps[id];
@@ -3426,29 +3875,43 @@ DT.End = (function () {
     // Evaluación del DT
     const userPos = finalPos[G.user];
     const userRelegated = relegatedAll.some((r) => r.tid === G.user);
-    hist.user = { team: userTeam.n, pos: userPos, of: SS.comps['L_' + userTeam.lg] ? SS.comps['L_' + userTeam.lg].teams.length : 0 };
-    End.reputation(finalPos, relegatedAll);
+    const userComp = SS.comps[DT.divOf(userTeam)];
+    hist.user = { team: userTeam.n, pos: userPos, of: userComp ? userComp.teams.length : 0, div: userComp ? userComp.name : '' };
+    const userPromoted = promotedAll.some((r) => r.tid === G.user);
+    End.reputation(finalPos, relegatedAll, promotedAll);
 
     // Ascensos y descensos
     for (const cc of DT.COUNTRY_ORDER) {
       const C = DT.COUNTRIES[cc];
       const rel = relegatedAll.filter((r) => r.cc === cc).map((r) => r.tid);
-      rel.forEach((tid) => (G.teams[tid].lg = null));
-      const pool = Object.values(G.teams).filter((t) => t.cc === cc && !t.lg && !rel.includes(t.id));
       const up = [];
-      for (let i = 0; i < rel.length && pool.length; i++) {
-        const t = U.weighted(pool, pool.map((x) => Math.pow(x.rep - 40, 2)));
-        pool.splice(pool.indexOf(t), 1);
-        t.lg = cc;
-        up.push(t);
-        DT.W.fillSquad(t, { P: 3, D: 7, M: 7, A: 5 });
+      if (SS.comps['B_' + cc]) {
+        // con segunda división: suben los primeros de la tabla y los que bajan juegan la segunda
+        rel.forEach((tid) => { G.teams[tid].lg = null; G.teams[tid].d2 = cc; });
+        for (const r of promotedAll.filter((x) => x.cc === cc)) {
+          const t = G.teams[r.tid];
+          t.d2 = null;
+          t.lg = cc;
+          up.push(t);
+          DT.W.fillSquad(t);
+        }
+      } else {
+        rel.forEach((tid) => (G.teams[tid].lg = null));
+        const pool = Object.values(G.teams).filter((t) => t.cc === cc && !t.lg && !t.d2 && !rel.includes(t.id));
+        for (let i = 0; i < rel.length && pool.length; i++) {
+          const t = U.weighted(pool, pool.map((x) => Math.pow(x.rep - 40, 2)));
+          pool.splice(pool.indexOf(t), 1);
+          t.lg = cc;
+          up.push(t);
+          DT.W.fillSquad(t, { P: 3, D: 7, M: 7, A: 5 });
+        }
       }
       DT.news(`${DT.COUNTRIES[cc].league}: descienden ${rel.map((id) => G.teams[id].n).join(' y ')}. Ascienden ${up.map((t) => t.n).join(' y ')}.`, 'world');
       hist.champs['REL_' + cc] = rel.map((id) => G.teams[id].n);
       hist.champs['UP_' + cc] = up.map((t) => t.n);
     }
 
-    DT.Board.seasonEnd(userPos, userRelegated);
+    DT.Board.seasonEnd(userPos, userRelegated, userPromoted);
 
     // Finanzas: cierre del ejercicio
     for (const id in G.teams) if (!G.teams[id].eur) DT.E.closeSeason(G.teams[id]);
@@ -3496,7 +3959,7 @@ DT.End = (function () {
     }
   };
 
-  End.reputation = function (finalPos, relegated) {
+  End.reputation = function (finalPos, relegated, promoted) {
     const G = DT.G;
     for (const cc of DT.COUNTRY_ORDER) {
       const ids = Object.values(G.teams).filter((t) => t.lg === cc).sort((a, b) => b.rep - a.rep).map((t) => t.id);
@@ -3510,6 +3973,7 @@ DT.End = (function () {
       });
     }
     for (const r of relegated) G.teams[r.tid].rep = Math.max(45, G.teams[r.tid].rep - 3);
+    for (const r of promoted || []) G.teams[r.tid].rep = Math.min(99, Math.max(G.teams[r.tid].rep + 3, 58));
     const SS = G.season;
     for (const [id, bonus] of [['LIB', 3], ['SUD', 2], ['INT', 2], ['REC', 1]]) {
       const c = SS.comps[id];
@@ -3518,7 +3982,7 @@ DT.End = (function () {
     // los equipos de la B tienden a un nivel medio
     for (const id in G.teams) {
       const t = G.teams[id];
-      if (!t.lg && !t.eur) t.rep += (58 - t.rep) * 0.1;
+      if (!t.lg && !t.eur) t.rep += ((t.d2 ? 57 : 52) - t.rep) * 0.1;
     }
   };
 
@@ -3552,12 +4016,14 @@ DT.End = (function () {
       }
     }
     // Joyas de inferiores que esperaban a fin de temporada
+    const promotedKids = [];
     for (const y of G.pendingYouth || []) {
       const t = G.teams[y.t];
       if (!t || !DT.isUser(t.id)) continue;
       const p = DT.P.create({ n: y.n, pos: y.pos, age: y.age + 1, ovr: y.ovr, pot: y.pot, t: t.id, cy: 4, yt: true });
       p.w = 15000;
       t.squad.push(p.id);
+      promotedKids.push(p.id);
     }
     G.pendingYouth = [];
     // IA: renovaciones, juveniles y completar planteles
@@ -3573,6 +4039,8 @@ DT.End = (function () {
         kids.push(k);
       }
       if (DT.isUser(id)) {
+        // aviso en pantalla con los juveniles que subieron al plantel
+        G.notices = (G.notices || []).concat([{ kind: 'youth', title: 'Suben juveniles al primer equipo', pids: promotedKids.concat(kids.map((k) => k.id)) }]);
         DT.inbox({ title: 'Suben juveniles de la cantera', body: kids.map((k) => `${k.n} (${U.posName[k.pos]}, ${k.age} años, media ${k.ovr}, potencial ${'★'.repeat(DT.P.stars(k.pot))})`).join('. ') + '.', kind: 'squad' });
       } else {
         DT.AI.ensureSquad(t);
@@ -3943,6 +4411,201 @@ DT.Ev = (function () {
         conf(6); allMor(2); return 'Te quedás. La directiva te agradece la lealtad.';
       },
     },
+
+    agentOffer: {
+      cond: () => (DT.G.week >= 2 && DT.G.week <= 40 && team().squad.length < 32 ? {} : null),
+      make: () => {
+        const t = team();
+        const pos = U.pick(['D', 'M', 'A', 'M', 'A']);
+        const age = U.ri(24, 31);
+        const n = DT.P.genName(U.pick(DT.COUNTRY_ORDER));
+        const ovr = U.clamp(Math.round(DT.W.teamLevel(t) + U.ri(-1, 4)), 50, 84);
+        const w = U.round(DT.P.fairWage({ ovr, age, pos, pot: ovr }, t.cc) * 1.15, 1000);
+        const fee = U.round(w * 0.6 + 20000, 5000);
+        return {
+          title: 'Un representante te ofrece un jugador',
+          body: `El representante de ${n} (${U.posLong[pos].toLowerCase()}, ${age} años, media ${ovr}) dice que está libre y quiere jugar en tu club. Pide ${U.money(w)} por año y una comisión de ${U.money(fee)}.`,
+          opts: [[`Ficharlo (comisión ${U.money(fee)})`, 'Llega ya, con contrato por 2 años.'], ['No me interesa', 'Seguís con el plantel que tenés.']],
+          n, pos, age, ovr, w, fee,
+        };
+      },
+      apply: (d, i) => {
+        if (i !== 0) return 'Le agradeciste al representante y no avanzaste.';
+        const t = team();
+        const p = DT.P.create({ n: d.n, pos: d.pos, age: d.age, ovr: d.ovr, pot: d.ovr + U.ri(0, 3), t: t.id, cy: 2 });
+        p.w = d.w;
+        t.squad.push(p.id);
+        DT.E.add(t, 'Fichajes', -d.fee);
+        return `${d.n} firmó por 2 años. Pagaste ${U.money(d.fee)} de comisión.`;
+      },
+    },
+    concert: {
+      cond: () => (team().cap >= 15000 ? {} : null),
+      make: () => { const v = U.round(team().cap * U.rf(4, 7) + 30000, 10000); return {
+        title: 'Recital en el estadio',
+        body: `Una productora quiere alquilar el estadio para un recital y paga ${U.money(v)}. El cuerpo técnico avisa que el césped va a quedar a la miseria un par de semanas.`,
+        opts: [[`Alquilar (+${U.money(v)})`, 'Entra plata; el plantel se queja del campo.'], ['No alquilar', 'El césped queda impecable.']],
+        v,
+      }; },
+      apply: (d, i) => {
+        if (i === 0) { DT.E.add(team(), 'Taquilla', d.v); allMor(-3); return `Cobraste ${U.money(d.v)}. Los jugadores protestan por el estado de la cancha.`; }
+        allMor(1); return 'El césped queda en perfectas condiciones.';
+      },
+    },
+    fatigueStar: {
+      cond: () => { const p = stars().slice(0, 11).find((x) => x.fit < 72 && x.inj <= 0); const m = nextUserMatch(); return p && m && m.w === DT.G.week ? { pid: p.id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: `Alerta física: ${p.n}`,
+        body: `El preparador físico avisa que ${p.n} está al límite (${Math.round(p.fit)}% de físico) y hay riesgo de lesión si juega esta semana.`,
+        opts: [['Darle descanso', 'No juega el próximo partido y recupera todo el físico.'], ['Que juegue igual', 'Puede rendir... o romperse.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.fit = 100; p.nt = 2; return `${p.n} descansa esta semana y vuelve a full.`; }
+        if (U.chance(0.35)) { p.inj = U.ri(2, 4); return `${p.n} se resintió en la práctica: ${p.inj} semanas afuera.`; }
+        p.mor = Math.min(100, p.mor + 4); return `${p.n} agradece la confianza y está disponible.`;
+      },
+    },
+    lockerFight: {
+      cond: () => { const s = stars().filter((p) => p.age >= 26 && !p.loan); return s.length >= 2 ? { a: s[0].id, b: s[1].id } : null; },
+      make: (d) => { const a = DT.G.players[d.a], b = DT.G.players[d.b]; return {
+        title: 'Pelea en el vestuario',
+        body: `${a.n} y ${b.n} discutieron fuerte después de la práctica y casi se van a las manos. El vestuario espera tu reacción.`,
+        opts: [[`Respaldar a ${lastName(a)}`, `${lastName(b)} se enoja.`], [`Respaldar a ${lastName(b)}`, `${lastName(a)} se enoja.`], ['Multar a los dos', 'Mensaje de autoridad: nadie queda contento.']],
+      }; },
+      apply: (d, i) => {
+        const a = DT.G.players[d.a], b = DT.G.players[d.b];
+        if (!a || !b) return 'La situación se resolvió sola.';
+        if (i === 0) { a.mor = Math.min(100, a.mor + 8); b.mor = Math.max(10, b.mor - 15); return `${a.n} se siente respaldado; ${b.n} quedó dolido.`; }
+        if (i === 1) { b.mor = Math.min(100, b.mor + 8); a.mor = Math.max(10, a.mor - 15); return `${b.n} se siente respaldado; ${a.n} quedó dolido.`; }
+        a.mor = Math.max(10, a.mor - 6); b.mor = Math.max(10, b.mor - 6); conf(2);
+        DT.E.add(team(), 'Multas', Math.round((a.w + b.w) * 0.03));
+        return 'Multaste a los dos. La directiva aprueba la mano dura.';
+      },
+    },
+    charity: {
+      cond: () => (DT.G.week >= 3 && DT.G.week <= 42 ? {} : null),
+      make: () => ({
+        title: 'Visita solidaria',
+        body: 'Una fundación invita al plantel a visitar un hospital de chicos y a donar camisetas firmadas en la semana.',
+        opts: [['Ir con todo el plantel', 'Gran imagen, un poco menos de descanso.'], ['Mandar a una delegación', 'Algo intermedio.'], ['No ir', 'Sin cambios.']],
+      }),
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { t.socios = Math.round(t.socios * 1.01); allMor(4); squad().forEach((p) => (p.fit = Math.max(40, p.fit - 3))); conf(2); return 'La visita emocionó a todos: suben los socios y el ánimo del plantel.'; }
+        if (i === 1) { allMor(2); conf(1); return 'Una delegación representó al club. Buena repercusión.'; }
+        return 'El plantel siguió con la rutina.';
+      },
+    },
+    tvSchedule: {
+      cond: () => { const m = nextUserMatch(); return m && m.h === DT.G.user && m.c.startsWith('L_') ? { mid: m.i } : null; },
+      make: () => { const v = U.round(DT.E.tvAnnual(team()) * 0.03 + 20000, 5000); return {
+        title: 'La TV quiere cambiar el horario',
+        body: `La televisión ofrece ${U.money(v)} extra para pasar tu próximo partido de local a un lunes a las 22. Los hinchas ya protestan en redes.`,
+        opts: [[`Aceptar (+${U.money(v)})`, 'Menos gente en la cancha y socios molestos.'], ['Rechazar', 'Se juega en el horario de siempre.']],
+        v,
+      }; },
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { DT.E.add(t, 'TV', d.v); t.anger = Math.max(t.anger || 0, 1); t.socios = Math.round(t.socios * 0.995); return `Cobraste ${U.money(d.v)}. Va a ir menos gente al partido.`; }
+        t.socios = Math.round(t.socios * 1.003); return 'Los hinchas valoran que defiendas el horario.';
+      },
+    },
+    youthCoach: {
+      cond: () => (team().infra.youth >= 2 ? {} : null),
+      make: () => { const c = money(90000); return {
+        title: 'Quieren llevarse al coordinador de inferiores',
+        body: `Otro club le ofrece el doble de sueldo al coordinador de las inferiores. Para retenerlo hay que pagarle ${U.money(c)} más por año.`,
+        opts: [[`Retenerlo (${U.money(c)})`, 'La cantera sigue igual.'], ['Dejarlo ir', 'Puede bajar el nivel de las inferiores.']],
+        c,
+      }; },
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { DT.E.add(t, 'Staff', -d.c); return 'El coordinador se queda y la cantera sigue trabajando bien.'; }
+        if (U.chance(0.45) && t.infra.youth > 1) { t.infra.youth--; return `Se fue y se notó: las divisiones inferiores bajan a nivel ${t.infra.youth}.`; }
+        return 'Se fue, pero su reemplazo está a la altura.';
+      },
+    },
+    boardChallenge: {
+      cond: () => { const M = DT.G.manager; return DT.G.week >= 4 && DT.G.week <= 20 && M.obj && M.obj.target >= 4 && M.conf >= 50 ? {} : null; },
+      make: () => { const M = DT.G.manager; const v = U.round(DT.E.estimateRevenue(team()) * 0.06, 50000); const nt = Math.max(1, M.obj.target - 2); return {
+        title: 'La directiva te propone un desafío',
+        body: `El presidente ofrece ${U.money(v)} extra para reforzar el plantel si te comprometés a terminar entre los ${nt} primeros (hoy el objetivo es top ${M.obj.target}).`,
+        opts: [[`Aceptar (+${U.money(v)})`, 'Más plata, objetivo más exigente.'], ['Mantener el objetivo', 'Sin cambios.']],
+        v, nt,
+      }; },
+      apply: (d, i) => {
+        const M = DT.G.manager;
+        if (i === 0) {
+          DT.E.add(team(), 'Préstamos', d.v);
+          M.obj.target = d.nt;
+          M.obj.text = `Objetivo exigente: terminar entre los ${d.nt} primeros.`;
+          conf(3);
+          return `Ingresaron ${U.money(d.v)}. Nuevo objetivo: top ${d.nt}.`;
+        }
+        return 'Seguís con el objetivo original.';
+      },
+    },
+    veteran: {
+      cond: () => { const p = squad().find((x) => x.age >= 34 && x.cy <= 1 && x.t && !x.loan); return p && DT.G.week >= 25 ? { pid: p.id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: `${p.n} piensa en el retiro`,
+        body: `${p.n} (${p.age} años) te confiesa que está pensando en colgar los botines a fin de año. Es una voz importante en el vestuario.`,
+        opts: [['Convencerlo de seguir un año más', 'Renueva por un año con el mismo sueldo.'], ['Respetar su decisión', 'Se despide a fin de temporada.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.cy += 1; p.mor = Math.min(100, p.mor + 10); allMor(2); return `${p.n} renovó por un año más.`; }
+        allMor(1); return `${p.n} jugará sus últimos partidos con el club. El vestuario se lo agradece.`;
+      },
+    },
+    socialPost: {
+      cond: () => { const c = squad().filter((p) => p.mor < 50 && !p.loan); return c.length ? { pid: U.pick(c).id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: 'Polémica en redes',
+        body: `${p.n} publicó un mensaje criticando sus pocos minutos. Se hizo viral y los periodistas preguntan.`,
+        opts: [['Hablar en privado y darle más minutos', 'Se calma, pero el resto lo nota.'], ['Multarlo', 'Autoridad; él se enoja.'], ['Ignorar el tema', 'Puede seguir creciendo.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.mor = Math.min(100, p.mor + 15); allMor(-1); return `${p.n} se comprometió a hablar puertas adentro.`; }
+        if (i === 1) { const f = Math.round(p.w * 0.04); DT.E.add(team(), 'Multas', f); p.mor = Math.max(10, p.mor - 10); conf(1); return `${p.n} fue multado con ${U.money(f)}.`; }
+        if (U.chance(0.5)) { p.mor = Math.max(10, p.mor - 8); allMor(-2); return 'El tema siguió en los medios y enrareció el clima.'; }
+        return 'La polémica se apagó sola.';
+      },
+    },
+    pitchFlood: {
+      cond: () => { const m = nextUserMatch(); return m && m.h === DT.G.user && m.w === DT.G.week && !m.n ? {} : null; },
+      make: () => { const c = money(60000); return {
+        title: 'Tormenta sobre el estadio',
+        body: `Una tormenta dejó el campo anegado y dañó una tribuna. Repararlo de urgencia cuesta ${U.money(c)}.`,
+        opts: [[`Reparar ya (${U.money(c)})`, 'El partido se juega con público completo.'], ['Jugar igual', 'Una tribuna clausurada: menos recaudación.']],
+        c,
+      }; },
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { DT.E.add(t, 'Mantenimiento', -d.c); return 'Las cuadrillas trabajaron toda la noche: el estadio está listo.'; }
+        t.anger = Math.max(t.anger || 0, 1); return 'Se juega con una tribuna clausurada.';
+      },
+    },
+    rivalTalks: {
+      cond: () => { const p = squad().filter((x) => x.age <= 23 && x.pot >= 78 && !x.loan).sort((a, b) => b.pot - a.pot)[0]; return p ? { pid: p.id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: `Le hablan al oído a ${p.n}`,
+        body: `Un club grande contactó a ${p.n} a espaldas tuyas y el chico está distraído. Cobra ${U.money(p.w)} por año y le quedan ${p.cy} ${p.cy === 1 ? 'año' : 'años'} de contrato.`,
+        opts: [[`Renovarlo con aumento (+30%, ${p.cy + 2} años)`, 'Asegurás a la promesa.'], ['Charla motivacional', 'Gratis, pero puede no alcanzar.'], ['Dejar que decida', 'Puede pedir irse.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.w = U.round(p.w * 1.3, 1000); p.cy += 2; p.mor = Math.min(100, p.mor + 15); return `${p.n} renovó y está enfocado.`; }
+        if (i === 1) { if (U.chance(0.55)) { p.mor = Math.min(100, p.mor + 10); return `${p.n} se quedó tranquilo.`; } p.mor = Math.max(10, p.mor - 8); return `${p.n} sigue con la cabeza en otro lado.`; }
+        p.mor = Math.max(10, p.mor - 18); return `${p.n} está molesto y podría pedir salir.`;
+      },
+    },
   };
 
   Ev.weekly = function () {
@@ -3953,7 +4616,7 @@ DT.Ev = (function () {
       if (m.kind === 'event' && !m.done && m.actions && (G.week - m.w >= 3 || m.y !== G.year)) DT.Act.resolve(m.id, m.actions.length - 1);
     }
     if (G.inbox.some((m) => m.kind === 'event' && !m.done)) return;
-    if (!U.chance(0.3)) return;
+    if (!U.chance(0.35)) return;
     const now = G.year * 100 + G.week;
     const keys = U.shuffle(Object.keys(DEFS));
     for (const k of keys) {
@@ -4212,9 +4875,17 @@ DT.UI = (function () {
     const r = parseInt(h.substr(0, 2), 16), g = parseInt(h.substr(2, 2), 16), b = parseInt(h.substr(4, 2), 16);
     return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111111' : '#ffffff';
   };
+  // Escudo real (football-logos.cc) si está en el catálogo; si no carga (sin conexión), el dibujado con los colores del club.
+  UI.crestUrl = function (t) {
+    const k = t && t.id && DT.CRESTS ? DT.CRESTS[t.id] : null;
+    return k && DT.CREST_COUNTRY[t.cc] ? `${DT.CREST_BASE}${DT.CREST_COUNTRY[t.cc]}/512x512/${k}.png` : null;
+  };
   UI.badge = function (t, size) {
     if (!t) return '';
-    return `<span class="badge-wrap"><span class="badge ${size || ''}" style="--c1:${t.c1};--c2:${t.c2};--bt:${UI.textOn(t.c1)}">${U.esc(t.s)}</span></span>`;
+    const drawn = `<span class="badge ${size || ''}" style="--c1:${t.c1};--c2:${t.c2};--bt:${UI.textOn(t.c1)}">${U.esc(t.s)}</span>`;
+    const url = UI.crestUrl(t);
+    if (!url) return `<span class="badge-wrap">${drawn}</span>`;
+    return `<span class="badge-wrap crest-wrap ${size || ''}"><img class="crest" src="${url}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('nocrest')">${drawn}</span>`;
   };
   UI.teamName = (t, cls) => `<span class="${cls || ''}" data-a="team" data-id="${t.id}">${U.esc(t.n)}</span>`;
   UI.pos = (p) => `<span class="pos ${p.pos}">${U.posName[p.pos]}</span>`;
@@ -4227,7 +4898,7 @@ DT.UI = (function () {
     let s = '';
     if (p.inj > 0) s += `<span class="pill bad">Lesión ${p.inj} sem</span>`;
     if (p.sus > 0) s += `<span class="pill bad">Suspendido</span>`;
-    if (p.nt > 0) s += '<span class="pill warn">Con la selección</span>';
+    if (p.nt > 0) s += `<span class="pill warn">${p.nt === 2 ? 'Descansa esta semana' : 'Con la selección'}</span>`;
     if (p.loan) s += `<span class="pill">${p.loan.from === DT.G.user ? 'Cedido' : 'A préstamo'}</span>`;
     if (p.lst) s += '<span class="pill warn">En venta</span>';
     if (p.cy <= 1 && p.t && DT.isUser(p.t)) s += '<span class="pill warn">Último año</span>';
@@ -4271,7 +4942,22 @@ DT.UI = (function () {
     $('#modal').hidden = true;
     $('#modal').innerHTML = '';
   };
-  UI.A.closeModal = () => UI.closeModal();
+  UI.A.closeModal = () => { UI.closeModal(); UI.showNotices(); };
+
+  // Avisos que aparecen solos en pantalla (por ejemplo, juveniles que suben al plantel).
+  UI.showNotices = function () {
+    const G = DT.G;
+    if (!G || !G.notices || !G.notices.length || !$('#modal').hidden) return;
+    const n = G.notices.shift();
+    if (n.kind === 'youth') {
+      const ps = (n.pids || []).map((id) => G.players[id]).filter((p) => p && p.t === G.user).sort(UI.byPos);
+      if (!ps.length) { UI.showNotices(); return; }
+      UI.modal(`<span class="kicker">Cantera</span><h2>${U.esc(n.title)}</h2>
+        <div class="small">${ps.length === 1 ? 'Este chico se suma' : `Estos ${ps.length} chicos se suman`} al plantel profesional. Tocá un jugador para ver su ficha.</div>
+        <section class="card"><div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(p.w)}/año</div></div>${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span></div>`).join('')}</div></section>
+        <button class="btn primary block" data-a="closeModal">Entendido</button>`);
+    } else UI.showNotices();
+  };
 
   // ---------- modo celular / ordenador ----------
   // Se guarda en el dispositivo (no en la partida). Sin preferencia guardada, pantallas anchas arrancan en modo ordenador.
@@ -4331,6 +5017,7 @@ DT.UI = (function () {
     const scr = DT.Screens[UI.tab] || DT.Screens.home;
     main.innerHTML = scr();
     UI.renderCTA();
+    UI.showNotices();
   };
 
   UI.A.quickMatch = () => {
@@ -4429,8 +5116,8 @@ DT.Screens = (function () {
       <div class="small">${M.obj ? U.esc(M.obj.text) : ''}</div>
     </section>`);
     // Tabla resumida
-    if (t.lg) {
-      const comp = G.season.comps['L_' + t.lg];
+    if (G.season.comps[DT.divOf(t)]) {
+      const comp = G.season.comps[DT.divOf(t)];
       const order = DT.S.sortTable(comp.table, comp.teams);
       const me = order.indexOf(t.id);
       const show = new Set([0, 1, 2, me - 1, me, me + 1].filter((i) => i >= 0 && i < order.length));
@@ -4702,10 +5389,12 @@ DT.Screens = (function () {
     const G = DT.G;
     const t = DT.userTeam();
     const SS = G.season;
-    if (!UI.compSel || !SS.comps[UI.compSel]) UI.compSel = t.lg ? 'L_' + t.lg : 'LIB';
+    if (!UI.compSel || (!SS.comps[UI.compSel] && !['OTH', 'CAL'].includes(UI.compSel))) UI.compSel = DT.divOf(t) || 'LIB';
     const cc = UI.compCountry || t.cc;
+    const hasB = !!SS.comps['B_' + cc];
     const chips = [
-      ['L_' + cc, 'Liga'],
+      ['L_' + cc, hasB ? 'Primera' : 'Liga'],
+      ...(hasB ? [['B_' + cc, 'Segunda']] : []),
       ['C_' + cc, 'Copa'],
       ['LIB', 'Libertadores'],
       ['SUD', 'Sudamericana'],
@@ -4729,7 +5418,10 @@ DT.Screens = (function () {
   };
   A.compCountry = (d) => {
     UI.compCountry = d.cc;
-    if (UI.compSel && (UI.compSel.startsWith('L_') || UI.compSel.startsWith('C_'))) UI.compSel = UI.compSel.slice(0, 2) + d.cc;
+    if (UI.compSel && /^[LBC]_/.test(UI.compSel)) {
+      UI.compSel = UI.compSel.slice(0, 2) + d.cc;
+      if (!DT.G.season.comps[UI.compSel]) UI.compSel = 'L_' + d.cc;
+    }
     UI.round = null;
     UI.render();
   };
@@ -4744,14 +5436,17 @@ DT.Screens = (function () {
     if (v === 'table') {
       const order = DT.S.sortTable(comp.table, comp.teams);
       const n = order.length;
+      const second = comp.div === 2;
       const rows = order.map((id, i) => {
         const r = comp.table[id], tm = G.teams[id];
-        const zone = i < C.lib ? 'lib' : i < C.lib + C.sud ? 'sud' : i >= n - C.rel ? 'rel' : '';
+        const zone = second ? (i < C.rel ? 'lib' : '') : i < C.lib ? 'lib' : i < C.lib + C.sud ? 'sud' : i >= n - C.rel ? 'rel' : '';
         return `<tr class="${DT.isUser(id) ? 'me' : ''}"><td class="zone ${zone}">${i + 1}</td><td class="team" data-a="team" data-id="${id}">${U.esc(tm.n)}</td><td>${r.pj}</td><td>${r.g}</td><td>${r.e}</td><td>${r.p}</td><td>${r.gf - r.gc > 0 ? '+' : ''}${r.gf - r.gc}</td><td><b>${r.pts}</b></td></tr>`;
       }).join('');
       body = `<section class="card"><h3>${U.esc(comp.name)} ${G.year}</h3><div class="tablewrap"><table><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>DG</th><th>Pts</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <div class="legend"><span><i style="background:var(--lib)"></i>Libertadores</span><span><i style="background:var(--sud)"></i>Sudamericana</span><span><i style="background:var(--rel)"></i>Descenso</span></div>
-        <div class="tiny muted">El campeón de la ${U.esc(C.cup)} también clasifica a la Libertadores.</div></section>`;
+        ${second
+    ? `<div class="legend"><span><i style="background:var(--lib)"></i>Ascenso a ${U.esc(C.league)}</span></div><div class="tiny muted">Suben los ${C.rel} primeros. En la segunda división no hay descenso.</div></section>`
+    : `<div class="legend"><span><i style="background:var(--lib)"></i>Libertadores</span><span><i style="background:var(--sud)"></i>Sudamericana</span><span><i style="background:var(--rel)"></i>Descenso${C.div2 ? ` a ${U.esc(C.div2.name)}` : ''}</span></div>
+        <div class="tiny muted">El campeón de la ${U.esc(C.cup)} también clasifica a la Libertadores.</div></section>`}`;
     } else if (v === 'round') {
       const all = Object.values(G.season.matches).filter((m) => m.c === comp.id);
       const nextR = (all.filter((m) => !m.p).sort((a, b) => a.st - b.st)[0] || { st: comp.rounds }).st;
@@ -4761,7 +5456,7 @@ DT.Screens = (function () {
         <div class="row between"><button class="btn sm" data-a="round" data-v="${r - 1}" ${r <= 1 ? 'disabled' : ''}>◀</button><h3>Fecha ${r} <span class="small muted">· semana ${ms[0] ? ms[0].w : ''}</span></h3><button class="btn sm" data-a="round" data-v="${r + 1}" ${r >= comp.rounds ? 'disabled' : ''}>▶</button></div>
         <div class="list">${ms.map(Sc.resultRow).join('')}</div></section>`;
     } else {
-      const ps = Object.values(G.players).filter((p) => p.t && G.teams[p.t].lg === comp.cc && p.st.g > 0).sort((a, b) => b.st.g - a.st.g || a.st.pj - b.st.pj).slice(0, 20);
+      const ps = Object.values(G.players).filter((p) => p.t && DT.divOf(G.teams[p.t]) === comp.id && p.st.g > 0).sort((a, b) => b.st.g - a.st.g || a.st.pj - b.st.pj).slice(0, 20);
       body = `<section class="card"><h3>Goleadores</h3><div class="list">${ps.map((p, i) => `<div class="li" data-a="player" data-id="${p.id}"><span class="muted tab-nums" style="width:20px">${i + 1}</span>${UI.badge(G.teams[p.t], 's')}<div class="name">${U.esc(p.n)}<div class="sub">${U.esc(G.teams[p.t].n)} · ${p.st.pj} PJ · ${p.st.a} asist.</div></div><span class="ovr">${p.st.g}</span></div>`).join('') || '<div class="empty small">Todavía no hubo goles.</div>'}</div></section>`;
     }
     return seg + body;
@@ -4872,7 +5567,7 @@ DT.Screens = (function () {
     const free = v === 'free';
     let ps = Object.values(G.players).filter((p) => (free ? !p.t : p.t && p.t !== t.id && !G.teams[p.t].eur));
     if (f.pos) ps = ps.filter((p) => p.pos === f.pos);
-    if (!free && f.cc) ps = ps.filter((p) => G.teams[p.t].cc === f.cc && G.teams[p.t].lg);
+    if (!free && f.cc) ps = ps.filter((p) => G.teams[p.t].cc === f.cc && DT.inLeague(G.teams[p.t]));
     if (f.age < 40) ps = ps.filter((p) => p.age <= f.age);
     if (f.minOvr) ps = ps.filter((p) => p.ovr >= f.minOvr);
     if (f.q) { const q = f.q.toLowerCase(); ps = ps.filter((p) => p.n.toLowerCase().includes(q)); }
@@ -4976,7 +5671,7 @@ DT.Screens = (function () {
     const ps = t.squad.map((id) => G.players[id]).sort(UI.byPos);
     const titles = (t.titles || []).slice(-8).reverse();
     UI.modal(`
-      <div class="row">${UI.badge(t, 'xl')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${t.eur ? 'Europa' : `${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].name)} · ${t.lg ? U.esc(DT.COUNTRIES[t.cc].league) : 'Segunda división'}`}</div></div></div>
+      <div class="row">${UI.badge(t, 'xl')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${t.eur ? 'Europa' : `${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].name)} · ${U.esc(DT.divName(t))}`}</div></div></div>
       ${t.eur ? '' : `<div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Socios</span><b>${U.num(t.socios)}</b></div><div><span>Estadio</span><b class="ellipsis" style="font-size:.95rem">${U.esc(t.stad)}</b></div><div><span>Capacidad</span><b>${U.num(t.cap)}</b></div><div><span>Formación</span><b>${t.tac.f}</b></div></div>`}
       ${titles.length ? `<div class="small">Títulos recientes: ${titles.map((x) => `${U.esc(x.c)} ${x.y}`).join(' · ')}</div>` : ''}
       <div class="list">${UI.grouped(ps, (p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`)}</div>`);
@@ -5328,7 +6023,8 @@ DT.Screens = (function () {
     const names = { LIB: 'Libertadores', SUD: 'Sudamericana', REC: 'Recopa', INT: 'Intercontinental' };
     const seasons = G.history.map((h) => {
       const main = ['LIB', 'SUD', 'REC', 'INT'].filter((k) => h.champs[k]).map((k) => `<div class="row between small"><span class="muted">${names[k]}</span><b>${U.esc(h.champs[k][1])}</b></div>`).join('');
-      const leagues = DT.COUNTRY_ORDER.map((cc) => h.champs['L_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].league)}</span><b>${U.esc(h.champs['L_' + cc][1])}</b></div>` : '').join('');
+      const leagues = DT.COUNTRY_ORDER.map((cc) => (h.champs['L_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].league)}</span><b>${U.esc(h.champs['L_' + cc][1])}</b></div>` : '')
+        + (h.champs['B_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].div2.name)}</span><b>${U.esc(h.champs['B_' + cc][1])}</b></div>` : '')).join('');
       const cups = DT.COUNTRY_ORDER.map((cc) => h.champs['C_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].cup)}</span><b>${U.esc(h.champs['C_' + cc][1])}</b></div>` : '').join('');
       const sc = h.scorers[t.cc] && h.scorers[t.cc][0];
       return `<section class="card"><div class="row between"><h3>Temporada ${h.y}</h3>${h.user ? `<span class="pill">${U.esc(h.user.team)}: ${h.user.pos}º</span>` : ''}</div>${main}<details><summary class="small" style="cursor:pointer;font-weight:600">Ligas y copas nacionales</summary><div class="stack" style="margin-top:8px">${leagues}${cups}</div></details>${sc ? `<div class="small muted">Goleador de ${DT.COUNTRIES[t.cc].name}: ${U.esc(sc[0])} (${U.esc(sc[1])}), ${sc[2]} goles.</div>` : ''}</section>`;
@@ -5350,6 +6046,7 @@ DT.Screens = (function () {
         <button class="btn block" data-a="exportSave">Exportar partida</button>
         <button class="btn block" data-a="importOpen">Importar partida</button>
       </section>
+      <section class="card"><h3>Dificultad</h3><div class="small">${G.settings.diff === 'real' ? '<b>Realista</b>: arrancaste en un club modesto y las ofertas de clubes más grandes dependen de tu reputación como DT.' : '<b>Arcade</b>: elegiste libremente el club.'} Se elige al empezar una partida nueva.</div></section>
       <section class="card"><h3>Pantalla</h3>
         <div class="small muted">El modo ordenador usa todo el ancho de la pantalla. Se recuerda en este dispositivo.</div>
         ${UI.layoutSwitch()}
@@ -6448,7 +7145,25 @@ DT.Main = (function () {
   const A = UI.A;
   const Main = { downloads: null };
   let saveCount = 0;
-  const start = { step: 1, cc: 'ARG', name: '', team: null };
+  const start = { step: 1, cc: 'ARG', name: '', team: null, diff: 'arcade' };
+  const DIFFS = [
+    ['arcade', 'Arcade', 'Elegís cualquier club, de los grandes a los chicos.'],
+    ['real', 'Realista', 'Arrancás en un club modesto y hacés carrera hasta llegar a los grandes.'],
+  ];
+  // Clubes para empezar: en modo realista solo la segunda división y los más modestos de primera.
+  Main.startClubs = function (cc, diff) {
+    const C = DT.COUNTRIES[cc];
+    const mk = (r, div) => ({ code: r[0], n: r[1], s: r[2], stad: r[3], cap: r[4], rep: r[5], c1: r[6], c2: r[7], div, id: cc + '_' + r[0], cc });
+    const first = DT.TEAMS[cc].map((r) => mk(r, 1)).sort((a, b) => b.rep - a.rep);
+    const second = ((DT.TEAMS2 || {})[cc] || []).map((r) => mk(r, 2)).sort((a, b) => b.rep - a.rep);
+    if (diff === 'real') {
+      const k = Math.ceil(first.length * (second.length ? 0.2 : 0.3));
+      const cut = first[first.length - k].rep;
+      first.forEach((x) => (x.ok = x.rep <= cut));
+      second.forEach((x) => (x.ok = true));
+    } else first.concat(second).forEach((x) => (x.ok = true));
+    return { first, second, C };
+  };
 
   Main.autosave = async function (force) {
     if (!DT.G) return false;
@@ -6500,6 +7215,8 @@ DT.Main = (function () {
           <h2>Nueva partida</h2>
           <label class="small" for="mgrname">Tu nombre de entrenador</label>
           <input type="text" id="mgrname" maxlength="30" placeholder="Ej: Marcelo Gallardo" value="${U.esc(start.name)}">
+          <span class="up">Dificultad</span>
+          <div class="diffpick">${DIFFS.map(([k, l, d]) => `<button class="${start.diff === k ? 'on' : ''}" data-a="stDiff" data-v="${k}" aria-pressed="${start.diff === k}"><b>${l}</b><span>${d}</span></button>`).join('')}</div>
           <span class="up">Elegí el país</span>
           <div class="chips" style="flex-wrap:wrap">${DT.COUNTRY_ORDER.map((cc) => `<button class="chip ${start.cc === cc ? 'on' : ''}" data-a="stCountry" data-cc="${cc}">${DT.COUNTRIES[cc].flag} ${DT.COUNTRIES[cc].name}</button>`).join('')}</div>
           <button class="btn primary block" data-a="stNext">Elegir club</button>
@@ -6507,16 +7224,19 @@ DT.Main = (function () {
         <section class="card flat small muted">Tu partida se guarda sola en este dispositivo. Desde Club → Partida podés exportarla como copia de seguridad.</section>`;
       return;
     }
-    const C = DT.COUNTRIES[start.cc];
-    const rows = DT.TEAMS[start.cc].map((r) => ({ code: r[0], n: r[1], s: r[2], stad: r[3], cap: r[4], rep: r[5], c1: r[6], c2: r[7] })).sort((a, b) => b.rep - a.rep);
-    const diff = (rep) => (rep >= 85 ? ['Grande', 'gold'] : rep >= 74 ? ['Competitivo', 'ok'] : rep >= 64 ? ['Medio', ''] : ['Chico: difícil', 'warn']);
+    const { first, second, C } = Main.startClubs(start.cc, start.diff);
+    const real = start.diff === 'real';
+    const diff = (r) => (r.div === 2 ? ['Ascenso', ''] : r.rep >= 85 ? ['Grande', 'gold'] : r.rep >= 74 ? ['Competitivo', 'ok'] : r.rep >= 64 ? ['Medio', ''] : ['Chico: difícil', 'warn']);
+    const list = (rows) => rows.filter((r) => r.ok).map((r) => {
+      const [lbl, cls] = diff(r);
+      return `<div class="li" data-a="stPick" data-code="${r.code}">${UI.badge(r)}<div class="name">${U.esc(r.n)}<div class="sub">${U.esc(r.stad)} · ${U.num(r.cap)}</div></div><span class="pill ${cls}">${lbl}</span></div>`;
+    }).join('');
+    const block = (title, rows, note) => (rows.some((r) => r.ok) ? `<section class="card"><h3>${U.esc(title)}</h3>${note ? `<div class="small muted">${note}</div>` : ''}<div class="list">${list(rows)}</div></section>` : '');
     main.innerHTML = `
-      <div class="row between"><button class="btn sm" data-a="stBack">◀ Volver</button><h2>${C.flag} ${U.esc(C.league)}</h2></div>
-      <div class="small muted">Los clubes grandes tienen más plata y planteles fuertes, pero la directiva exige títulos. Los chicos son un desafío financiero.</div>
-      <section class="card"><div class="list">${rows.map((r) => {
-        const [lbl, cls] = diff(r.rep);
-        return `<div class="li" data-a="stPick" data-code="${r.code}">${UI.badge({ c1: r.c1, c2: r.c2, s: r.s })}<div class="name">${U.esc(r.n)}<div class="sub">${U.esc(r.stad)} · ${U.num(r.cap)}</div></div><span class="pill ${cls}">${lbl}</span></div>`;
-      }).join('')}</div></section>`;
+      <div class="row between"><button class="btn sm" data-a="stBack">◀ Volver</button><h2>${C.flag} ${U.esc(C.name)}</h2></div>
+      <div class="small muted">${real ? 'Modo realista: solo podés arrancar en clubes modestos. Con buenas campañas te van a llamar clubes más grandes.' : 'Los clubes grandes tienen más plata y planteles fuertes, pero la directiva exige títulos. Los chicos son un desafío financiero.'}</div>
+      ${block(C.league, first, real ? 'Los más modestos de primera: pelean por no descender.' : '')}
+      ${C.div2 ? block(C.div2.name, second, `Segunda división: suben los ${C.rel} primeros.`) : ''}`;
   }
   // vuelve a dibujar la pantalla inicial (al cambiar entre modo celular y ordenador)
   Main.refreshStart = async function () {
@@ -6534,10 +7254,15 @@ DT.Main = (function () {
     renderStart();
     window.scrollTo(0, 0);
   };
+  A.stDiff = (d) => {
+    start.name = (document.getElementById('mgrname') || {}).value || start.name;
+    start.diff = d.v === 'real' ? 'real' : 'arcade';
+    renderStart(DT.Save.localMeta(), null);
+  };
   A.stBack = () => { start.step = 1; renderStart(DT.Save.localMeta(), null); };
   A.stPick = (d) => {
     const name = (start.name || '').trim() || 'El Profe';
-    DT.W.newGame(start.cc + '_' + d.code, name);
+    DT.W.newGame(start.cc + '_' + d.code, name, start.diff);
     UI.tab = 'home';
     Main.autosave(true);
     UI.render();
@@ -6598,11 +7323,12 @@ DT.Main = (function () {
     const names = { LIB: 'Copa Libertadores', SUD: 'Copa Sudamericana', REC: 'Recopa', INT: 'Intercontinental' };
     const myTitles = G.manager.titles.filter((x) => x.y === h.y);
     UI.modal(`<span class="kicker">Fin de temporada ${h.y}</span>
-      <h2>${myTitles.length ? `¡${myTitles.length} ${myTitles.length === 1 ? 'título' : 'títulos'} para ${U.esc(h.user.team)}!` : `${U.esc(h.user.team)} terminó ${h.user.pos}º`}</h2>
+      <h2>${myTitles.length ? `¡${myTitles.length} ${myTitles.length === 1 ? 'título' : 'títulos'} para ${U.esc(h.user.team)}!` : `${U.esc(h.user.team)} terminó ${h.user.pos}º${h.user.div ? ` en ${U.esc(h.user.div)}` : ''}`}</h2>
       ${myTitles.length ? `<div class="stack">${myTitles.map((x) => `<span class="pill gold">${U.esc(x.c)}</span>`).join('')}</div>` : ''}
       <section class="card">
         ${Object.keys(names).filter((k) => h.champs[k]).map((k) => `<div class="row between small"><span class="muted">${names[k]}</span><b>${U.esc(h.champs[k][1])}</b></div>`).join('')}
         ${h.champs['L_' + cc] ? `<div class="row between small"><span class="muted">${U.esc(DT.COUNTRIES[cc].league)}</span><b>${U.esc(h.champs['L_' + cc][1])}</b></div>` : ''}
+        ${h.champs['B_' + cc] ? `<div class="row between small"><span class="muted">${U.esc(DT.COUNTRIES[cc].div2.name)}</span><b>${U.esc(h.champs['B_' + cc][1])}</b></div>` : ''}
         ${h.champs['C_' + cc] ? `<div class="row between small"><span class="muted">${U.esc(DT.COUNTRIES[cc].cup)}</span><b>${U.esc(h.champs['C_' + cc][1])}</b></div>` : ''}
         ${h.scorers[cc] && h.scorers[cc][0] ? `<div class="row between small"><span class="muted">Goleador</span><b>${U.esc(h.scorers[cc][0][0])} (${h.scorers[cc][0][2]})</b></div>` : ''}
         ${h.champs['REL_' + cc] ? `<div class="small muted">Descienden: ${h.champs['REL_' + cc].map(U.esc).join(', ')}. Ascienden: ${(h.champs['UP_' + cc] || []).map(U.esc).join(', ')}.</div>` : ''}
