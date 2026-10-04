@@ -1,4 +1,4 @@
-// Liga Profesional Argentina. Planteles aproximados (temporada 2025/26).
+// Liga Profesional Argentina 2026. Planteles aproximados (temporada 2025/26).
 // Formato jugador: Nombre/Puesto(P,D,M,A)/Edad/Media
 DT.TEAMS.ARG = [
   ['RIV', 'River Plate', 'RIV', 'Más Monumental', 85018, 92, '#ffffff', '#d6001c',
@@ -39,8 +39,6 @@ DT.TEAMS.ARG = [
     'Juan Pablo Cozzani/P/27/70|Ignacio Vázquez/D/28/70|Oscar Salomón/D/25/69|Vicente Taborda/M/24/71|Franco Zapiola/M/26/69|Guido Mainero/M/30/70|Ignacio Schor/M/24/70|Augusto Lotti/A/29/70'],
   ['TIG', 'Tigre', 'TIG', 'José Dellagiovanna', 26282, 68, '#0a3a8c', '#d50000',
     'Felipe Zenobio/P/25/69|Sebastián Prieto/D/31/69|Martín Garay/M/27/69|Sebastián Medina/M/32/69|Jalil Elías/M/29/68|David Romero/A/33/70|Ignacio Russo/A/24/70'],
-  ['GOD', 'Godoy Cruz', 'GOD', 'Malvinas Argentinas', 40268, 69, '#0a3a8c', '#ffffff',
-    'Franco Petroli/P/27/70|Federico Rasmussen/D/28/69|Pier Barrios/D/35/68|Vicente Poggi/M/24/70|Salomón Rodríguez/A/25/70'],
   ['IRV', 'Independiente Rivadavia', 'IRV', 'Bautista Gargantini', 24000, 67, '#0a3a8c', '#ffffff',
     'Ezequiel Centurión/P/28/70|Matías Fernández/M/30/69|Tomás Bottari/M/25/68|Sebastián Villa/A/30/74|Alex Arce/A/30/70'],
   ['UNI', 'Unión', 'UNI', '15 de Abril', 28000, 70, '#d50000', '#ffffff',
@@ -57,8 +55,8 @@ DT.TEAMS.ARG = [
     'Ignacio Arce/P/33/68|Milton Céliz/M/33/68|Jonathan Herrera/A/34/68'],
   ['ALD', 'Aldosivi', 'ALD', 'José María Minella', 35180, 63, '#1b7a2f', '#f7d000',
     'Natanael Guzmán/A/24/68'],
-  ['SMS', 'San Martín de San Juan', 'SMS', 'Hilario Sánchez', 19000, 61, '#1b7a2f', '#111111',
-    'Matías Borgogno/P/30/68'],
   ['HUR', 'Huracán', 'HUR', 'Tomás Adolfo Ducó', 48314, 75, '#ffffff', '#d50000',
     'Hernán Galíndez/P/39/74|Fernando Tobio/D/36/70|César Ibáñez/D/33/70|Lucas Carrizo/D/28/70|Guillermo Soto/D/31/71|Hugo Nervo/D/34/69|Leonardo Gil/M/34/71|Emmanuel Ojeda/M/28/70|Rodrigo Echeverría/M/30/70|Facundo Waller/M/28/69|Matko Miljevic/M/25/70|Eric Ramírez/A/27/70|Jordy Caicedo/A/28/71'],
+  ['GIM', 'Gimnasia de Mendoza', 'GMZ', 'Víctor Legrotaglie', 11500, 62, '#0b2e6b', '#ffffff'],
+  ['ERC', 'Estudiantes de Río Cuarto', 'ERC', 'Antonio Candini', 10000, 58, '#0d47a1', '#ffffff'],
 ];

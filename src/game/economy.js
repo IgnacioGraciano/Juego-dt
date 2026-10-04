@@ -14,7 +14,7 @@ DT.E = (function () {
   E.tvAnnual = (t) => {
     const C = DT.COUNTRIES[t.cc];
     const base = C.tv * 1e6 * (0.3 + 0.35 * Math.pow(E.mi(t), 0.4));
-    return t.lg ? base : base * 0.25; // fuera de primera cobra mucho menos
+    return t.lg ? base : base * (t.d2 ? 0.35 : 0.25); // fuera de primera cobra mucho menos
   };
   E.sponsorBase = (t) => U.round(0.45 * E.mi(t) * E.W(t) * 1e6 + 60000, 10000);
   E.merchAnnual = (t) => 0.3 * E.mi(t) * E.W(t) * 1e6 + 30000;
@@ -239,7 +239,7 @@ DT.E = (function () {
 
   // Cierre del ejercicio anual.
   E.closeSeason = function (t) {
-    if (!DT.isUser(t.id) && t.lg) E.aiInvest(t);
+    if (!DT.isUser(t.id) && DT.inLeague(t)) E.aiInvest(t);
     const tot = E.totals(t);
     t.fin.hist.push({ y: DT.G.year, inc: tot.inc, exp: tot.exp, cash: Math.round(t.cash), detail: JSON.parse(JSON.stringify(t.fin.cur)) });
     if (t.fin.hist.length > 12) t.fin.hist.shift();

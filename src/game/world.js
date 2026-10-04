@@ -15,7 +15,8 @@ DT.W = (function () {
     });
   }
 
-  function makeTeam(cc, row, inLeague) {
+  // div: 1 primera, 2 segunda, 0 sin liga profesional
+  function makeTeam(cc, row, div) {
     const [code, name, short, stad, cap, rep, c1, c2] = row;
     const C = DT.COUNTRIES[cc];
     const t = {
@@ -23,7 +24,8 @@ DT.W = (function () {
       n: name,
       s: short,
       cc,
-      lg: inLeague ? cc : null,
+      lg: div === 1 ? cc : null,
+      d2: div === 2 ? cc : null,
       stad,
       cap,
       rep,
@@ -74,7 +76,7 @@ DT.W = (function () {
     }
   };
 
-  W.newGame = function (userTeamId, managerName) {
+  W.newGame = function (userTeamId, managerName, diff) {
     DT.G = {
       v: DT.VERSION,
       year: 2026,
@@ -94,13 +96,14 @@ DT.W = (function () {
       holders: { LIB: 'BRA_FLA', SUD: 'ARG_LAN' },
       prevTables: {},
       abroad: [],
-      settings: { speed: 2 },
+      settings: { speed: 2, diff: diff === 'real' ? 'real' : 'arcade' },
     };
     const G = DT.G;
     for (const cc of DT.COUNTRY_ORDER) {
       const C = DT.COUNTRIES[cc];
-      for (const row of DT.TEAMS[cc]) {
-        const t = makeTeam(cc, row, true);
+      const rows = DT.TEAMS[cc].map((r) => [r, 1]).concat(((DT.TEAMS2 || {})[cc] || []).map((r) => [r, 2]));
+      for (const [row, div] of rows) {
+        const t = makeTeam(cc, row, div);
         G.teams[t.id] = t;
         for (const pd of parseSquad(row[8])) {
           const p = DT.P.create({ n: pd.n, pos: pd.pos, age: pd.age, ovr: pd.ovr, t: t.id, real: true, cy: pd.age >= 33 ? U.ri(1, 2) : U.ri(1, 4) });
@@ -109,7 +112,7 @@ DT.W = (function () {
         W.fillSquad(t);
       }
       for (const row of C.pool) {
-        const t = makeTeam(cc, row, false);
+        const t = makeTeam(cc, row, 0);
         G.teams[t.id] = t;
         W.fillSquad(t, { P: 3, D: 7, M: 7, A: 5 });
       }
@@ -142,7 +145,8 @@ DT.W = (function () {
     const old = G.user;
     G.user = tid;
     const t = G.teams[tid];
-    if (first) G.manager.rep = U.clamp(t.rep - 12, 35, 80);
+    // en modo realista el DT arranca sin nombre y tiene que hacer carrera
+    if (first) G.manager.rep = G.settings.diff === 'real' ? U.clamp(t.rep - 18, 22, 45) : U.clamp(t.rep - 12, 35, 80);
     G.manager.conf = 60;
     G.manager.clubs.push({ id: tid, n: t.n, from: G.year });
     t.xi = null;

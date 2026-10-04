@@ -116,6 +116,21 @@ h3 { font-size: 1.1rem; }
 .badge.l { width: 56px; height: 62px; font-size: 1.05rem; padding-bottom: 10px; }
 .badge.xl { width: 72px; height: 80px; font-size: 1.3rem; padding-bottom: 12px; }
 .badge-wrap { filter: drop-shadow(0 0 0.6px var(--muted)); display: inline-flex; }
+/* Escudos reales: si la imagen no carga se muestra el escudo dibujado */
+.crest-wrap { filter: none; width: 34px; height: 38px; flex: none; align-items: center; justify-content: center; }
+.crest-wrap.s { width: 22px; height: 25px; } .crest-wrap.l { width: 56px; height: 62px; } .crest-wrap.xl { width: 72px; height: 80px; }
+.crest-wrap .crest { width: 100%; height: 100%; object-fit: contain; display: block; }
+.crest-wrap > .badge { display: none; }
+.crest-wrap.nocrest { filter: drop-shadow(0 0 0.6px var(--muted)); }
+.crest-wrap.nocrest > .crest { display: none; }
+.crest-wrap.nocrest > .badge { display: inline-grid; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); } }
+:root[data-theme="dark"] .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); }
+.diffpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.diffpick button { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.diffpick button b { font-family: var(--display); font-size: 1.1rem; }
+.diffpick button span { font-size: 0.78rem; color: var(--muted); }
+.diffpick button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
 .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
 .pill.ok { color: var(--win); border-color: currentColor; background: transparent; }

@@ -107,8 +107,20 @@ DT.S = (function () {
         const w = Math.floor(1 + (r * 44) / rounds.length);
         rd.forEach(([h, a]) => addMatch({ c: comp.id, h, a, w, s: 1, st: r + 1 }));
       });
-      // Copa nacional
-      S.createCup(cc, ids);
+      // Segunda división (en los países que la tienen)
+      const ids2 = Object.values(G.teams).filter((t) => t.d2 === cc).map((t) => t.id);
+      if (C.div2 && ids2.length) {
+        const r2 = roundRobin(U.shuffle(ids2.slice()), C.div2.format === 2);
+        const c2 = { id: 'B_' + cc, type: 'league', div: 2, cc, name: C.div2.name, teams: ids2, table: {}, rounds: r2.length };
+        ids2.forEach((id) => (c2.table[id] = newRow()));
+        SS.comps[c2.id] = c2;
+        r2.forEach((rd, r) => {
+          const w = Math.floor(1 + (r * 44) / r2.length);
+          rd.forEach(([h, a]) => addMatch({ c: c2.id, h, a, w, s: 1, st: r + 1 }));
+        });
+      }
+      // Copa nacional: primera y segunda división
+      S.createCup(cc, ids.concat(ids2));
     }
     // Torneos internacionales
     const qual = first ? S.initialQualifiers() : G.nextQual;
@@ -254,7 +266,7 @@ DT.S = (function () {
 
   function compType(match) {
     const c = match.c;
-    if (c.startsWith('L_')) return 'league';
+    if (c.startsWith('L_') || c.startsWith('B_')) return 'league';
     if (c.startsWith('C_')) return 'cup';
     return 'cont';
   }

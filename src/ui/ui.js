@@ -29,9 +29,17 @@ DT.UI = (function () {
     const r = parseInt(h.substr(0, 2), 16), g = parseInt(h.substr(2, 2), 16), b = parseInt(h.substr(4, 2), 16);
     return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111111' : '#ffffff';
   };
+  // Escudo real (football-logos.cc) si está en el catálogo; si no carga (sin conexión), el dibujado con los colores del club.
+  UI.crestUrl = function (t) {
+    const k = t && t.id && DT.CRESTS ? DT.CRESTS[t.id] : null;
+    return k && DT.CREST_COUNTRY[t.cc] ? `${DT.CREST_BASE}${DT.CREST_COUNTRY[t.cc]}/512x512/${k}.png` : null;
+  };
   UI.badge = function (t, size) {
     if (!t) return '';
-    return `<span class="badge-wrap"><span class="badge ${size || ''}" style="--c1:${t.c1};--c2:${t.c2};--bt:${UI.textOn(t.c1)}">${U.esc(t.s)}</span></span>`;
+    const drawn = `<span class="badge ${size || ''}" style="--c1:${t.c1};--c2:${t.c2};--bt:${UI.textOn(t.c1)}">${U.esc(t.s)}</span>`;
+    const url = UI.crestUrl(t);
+    if (!url) return `<span class="badge-wrap">${drawn}</span>`;
+    return `<span class="badge-wrap crest-wrap ${size || ''}"><img class="crest" src="${url}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('nocrest')">${drawn}</span>`;
   };
   UI.teamName = (t, cls) => `<span class="${cls || ''}" data-a="team" data-id="${t.id}">${U.esc(t.n)}</span>`;
   UI.pos = (p) => `<span class="pos ${p.pos}">${U.posName[p.pos]}</span>`;
@@ -44,7 +52,7 @@ DT.UI = (function () {
     let s = '';
     if (p.inj > 0) s += `<span class="pill bad">Lesión ${p.inj} sem</span>`;
     if (p.sus > 0) s += `<span class="pill bad">Suspendido</span>`;
-    if (p.nt > 0) s += '<span class="pill warn">Con la selección</span>';
+    if (p.nt > 0) s += `<span class="pill warn">${p.nt === 2 ? 'Descansa esta semana' : 'Con la selección'}</span>`;
     if (p.loan) s += `<span class="pill">${p.loan.from === DT.G.user ? 'Cedido' : 'A préstamo'}</span>`;
     if (p.lst) s += '<span class="pill warn">En venta</span>';
     if (p.cy <= 1 && p.t && DT.isUser(p.t)) s += '<span class="pill warn">Último año</span>';
@@ -88,7 +96,22 @@ DT.UI = (function () {
     $('#modal').hidden = true;
     $('#modal').innerHTML = '';
   };
-  UI.A.closeModal = () => UI.closeModal();
+  UI.A.closeModal = () => { UI.closeModal(); UI.showNotices(); };
+
+  // Avisos que aparecen solos en pantalla (por ejemplo, juveniles que suben al plantel).
+  UI.showNotices = function () {
+    const G = DT.G;
+    if (!G || !G.notices || !G.notices.length || !$('#modal').hidden) return;
+    const n = G.notices.shift();
+    if (n.kind === 'youth') {
+      const ps = (n.pids || []).map((id) => G.players[id]).filter((p) => p && p.t === G.user).sort(UI.byPos);
+      if (!ps.length) { UI.showNotices(); return; }
+      UI.modal(`<span class="kicker">Cantera</span><h2>${U.esc(n.title)}</h2>
+        <div class="small">${ps.length === 1 ? 'Este chico se suma' : `Estos ${ps.length} chicos se suman`} al plantel profesional. Tocá un jugador para ver su ficha.</div>
+        <section class="card"><div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(p.w)}/año</div></div>${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span></div>`).join('')}</div></section>
+        <button class="btn primary block" data-a="closeModal">Entendido</button>`);
+    } else UI.showNotices();
+  };
 
   // ---------- modo celular / ordenador ----------
   // Se guarda en el dispositivo (no en la partida). Sin preferencia guardada, pantallas anchas arrancan en modo ordenador.
@@ -148,6 +171,7 @@ DT.UI = (function () {
     const scr = DT.Screens[UI.tab] || DT.Screens.home;
     main.innerHTML = scr();
     UI.renderCTA();
+    UI.showNotices();
   };
 
   UI.A.quickMatch = () => {

@@ -258,6 +258,201 @@ DT.Ev = (function () {
         conf(6); allMor(2); return 'Te quedás. La directiva te agradece la lealtad.';
       },
     },
+
+    agentOffer: {
+      cond: () => (DT.G.week >= 2 && DT.G.week <= 40 && team().squad.length < 32 ? {} : null),
+      make: () => {
+        const t = team();
+        const pos = U.pick(['D', 'M', 'A', 'M', 'A']);
+        const age = U.ri(24, 31);
+        const n = DT.P.genName(U.pick(DT.COUNTRY_ORDER));
+        const ovr = U.clamp(Math.round(DT.W.teamLevel(t) + U.ri(-1, 4)), 50, 84);
+        const w = U.round(DT.P.fairWage({ ovr, age, pos, pot: ovr }, t.cc) * 1.15, 1000);
+        const fee = U.round(w * 0.6 + 20000, 5000);
+        return {
+          title: 'Un representante te ofrece un jugador',
+          body: `El representante de ${n} (${U.posLong[pos].toLowerCase()}, ${age} años, media ${ovr}) dice que está libre y quiere jugar en tu club. Pide ${U.money(w)} por año y una comisión de ${U.money(fee)}.`,
+          opts: [[`Ficharlo (comisión ${U.money(fee)})`, 'Llega ya, con contrato por 2 años.'], ['No me interesa', 'Seguís con el plantel que tenés.']],
+          n, pos, age, ovr, w, fee,
+        };
+      },
+      apply: (d, i) => {
+        if (i !== 0) return 'Le agradeciste al representante y no avanzaste.';
+        const t = team();
+        const p = DT.P.create({ n: d.n, pos: d.pos, age: d.age, ovr: d.ovr, pot: d.ovr + U.ri(0, 3), t: t.id, cy: 2 });
+        p.w = d.w;
+        t.squad.push(p.id);
+        DT.E.add(t, 'Fichajes', -d.fee);
+        return `${d.n} firmó por 2 años. Pagaste ${U.money(d.fee)} de comisión.`;
+      },
+    },
+    concert: {
+      cond: () => (team().cap >= 15000 ? {} : null),
+      make: () => { const v = U.round(team().cap * U.rf(4, 7) + 30000, 10000); return {
+        title: 'Recital en el estadio',
+        body: `Una productora quiere alquilar el estadio para un recital y paga ${U.money(v)}. El cuerpo técnico avisa que el césped va a quedar a la miseria un par de semanas.`,
+        opts: [[`Alquilar (+${U.money(v)})`, 'Entra plata; el plantel se queja del campo.'], ['No alquilar', 'El césped queda impecable.']],
+        v,
+      }; },
+      apply: (d, i) => {
+        if (i === 0) { DT.E.add(team(), 'Taquilla', d.v); allMor(-3); return `Cobraste ${U.money(d.v)}. Los jugadores protestan por el estado de la cancha.`; }
+        allMor(1); return 'El césped queda en perfectas condiciones.';
+      },
+    },
+    fatigueStar: {
+      cond: () => { const p = stars().slice(0, 11).find((x) => x.fit < 72 && x.inj <= 0); const m = nextUserMatch(); return p && m && m.w === DT.G.week ? { pid: p.id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: `Alerta física: ${p.n}`,
+        body: `El preparador físico avisa que ${p.n} está al límite (${Math.round(p.fit)}% de físico) y hay riesgo de lesión si juega esta semana.`,
+        opts: [['Darle descanso', 'No juega el próximo partido y recupera todo el físico.'], ['Que juegue igual', 'Puede rendir... o romperse.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.fit = 100; p.nt = 2; return `${p.n} descansa esta semana y vuelve a full.`; }
+        if (U.chance(0.35)) { p.inj = U.ri(2, 4); return `${p.n} se resintió en la práctica: ${p.inj} semanas afuera.`; }
+        p.mor = Math.min(100, p.mor + 4); return `${p.n} agradece la confianza y está disponible.`;
+      },
+    },
+    lockerFight: {
+      cond: () => { const s = stars().filter((p) => p.age >= 26 && !p.loan); return s.length >= 2 ? { a: s[0].id, b: s[1].id } : null; },
+      make: (d) => { const a = DT.G.players[d.a], b = DT.G.players[d.b]; return {
+        title: 'Pelea en el vestuario',
+        body: `${a.n} y ${b.n} discutieron fuerte después de la práctica y casi se van a las manos. El vestuario espera tu reacción.`,
+        opts: [[`Respaldar a ${lastName(a)}`, `${lastName(b)} se enoja.`], [`Respaldar a ${lastName(b)}`, `${lastName(a)} se enoja.`], ['Multar a los dos', 'Mensaje de autoridad: nadie queda contento.']],
+      }; },
+      apply: (d, i) => {
+        const a = DT.G.players[d.a], b = DT.G.players[d.b];
+        if (!a || !b) return 'La situación se resolvió sola.';
+        if (i === 0) { a.mor = Math.min(100, a.mor + 8); b.mor = Math.max(10, b.mor - 15); return `${a.n} se siente respaldado; ${b.n} quedó dolido.`; }
+        if (i === 1) { b.mor = Math.min(100, b.mor + 8); a.mor = Math.max(10, a.mor - 15); return `${b.n} se siente respaldado; ${a.n} quedó dolido.`; }
+        a.mor = Math.max(10, a.mor - 6); b.mor = Math.max(10, b.mor - 6); conf(2);
+        DT.E.add(team(), 'Multas', Math.round((a.w + b.w) * 0.03));
+        return 'Multaste a los dos. La directiva aprueba la mano dura.';
+      },
+    },
+    charity: {
+      cond: () => (DT.G.week >= 3 && DT.G.week <= 42 ? {} : null),
+      make: () => ({
+        title: 'Visita solidaria',
+        body: 'Una fundación invita al plantel a visitar un hospital de chicos y a donar camisetas firmadas en la semana.',
+        opts: [['Ir con todo el plantel', 'Gran imagen, un poco menos de descanso.'], ['Mandar a una delegación', 'Algo intermedio.'], ['No ir', 'Sin cambios.']],
+      }),
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { t.socios = Math.round(t.socios * 1.01); allMor(4); squad().forEach((p) => (p.fit = Math.max(40, p.fit - 3))); conf(2); return 'La visita emocionó a todos: suben los socios y el ánimo del plantel.'; }
+        if (i === 1) { allMor(2); conf(1); return 'Una delegación representó al club. Buena repercusión.'; }
+        return 'El plantel siguió con la rutina.';
+      },
+    },
+    tvSchedule: {
+      cond: () => { const m = nextUserMatch(); return m && m.h === DT.G.user && m.c.startsWith('L_') ? { mid: m.i } : null; },
+      make: () => { const v = U.round(DT.E.tvAnnual(team()) * 0.03 + 20000, 5000); return {
+        title: 'La TV quiere cambiar el horario',
+        body: `La televisión ofrece ${U.money(v)} extra para pasar tu próximo partido de local a un lunes a las 22. Los hinchas ya protestan en redes.`,
+        opts: [[`Aceptar (+${U.money(v)})`, 'Menos gente en la cancha y socios molestos.'], ['Rechazar', 'Se juega en el horario de siempre.']],
+        v,
+      }; },
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { DT.E.add(t, 'TV', d.v); t.anger = Math.max(t.anger || 0, 1); t.socios = Math.round(t.socios * 0.995); return `Cobraste ${U.money(d.v)}. Va a ir menos gente al partido.`; }
+        t.socios = Math.round(t.socios * 1.003); return 'Los hinchas valoran que defiendas el horario.';
+      },
+    },
+    youthCoach: {
+      cond: () => (team().infra.youth >= 2 ? {} : null),
+      make: () => { const c = money(90000); return {
+        title: 'Quieren llevarse al coordinador de inferiores',
+        body: `Otro club le ofrece el doble de sueldo al coordinador de las inferiores. Para retenerlo hay que pagarle ${U.money(c)} más por año.`,
+        opts: [[`Retenerlo (${U.money(c)})`, 'La cantera sigue igual.'], ['Dejarlo ir', 'Puede bajar el nivel de las inferiores.']],
+        c,
+      }; },
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { DT.E.add(t, 'Staff', -d.c); return 'El coordinador se queda y la cantera sigue trabajando bien.'; }
+        if (U.chance(0.45) && t.infra.youth > 1) { t.infra.youth--; return `Se fue y se notó: las divisiones inferiores bajan a nivel ${t.infra.youth}.`; }
+        return 'Se fue, pero su reemplazo está a la altura.';
+      },
+    },
+    boardChallenge: {
+      cond: () => { const M = DT.G.manager; return DT.G.week >= 4 && DT.G.week <= 20 && M.obj && M.obj.target >= 4 && M.conf >= 50 ? {} : null; },
+      make: () => { const M = DT.G.manager; const v = U.round(DT.E.estimateRevenue(team()) * 0.06, 50000); const nt = Math.max(1, M.obj.target - 2); return {
+        title: 'La directiva te propone un desafío',
+        body: `El presidente ofrece ${U.money(v)} extra para reforzar el plantel si te comprometés a terminar entre los ${nt} primeros (hoy el objetivo es top ${M.obj.target}).`,
+        opts: [[`Aceptar (+${U.money(v)})`, 'Más plata, objetivo más exigente.'], ['Mantener el objetivo', 'Sin cambios.']],
+        v, nt,
+      }; },
+      apply: (d, i) => {
+        const M = DT.G.manager;
+        if (i === 0) {
+          DT.E.add(team(), 'Préstamos', d.v);
+          M.obj.target = d.nt;
+          M.obj.text = `Objetivo exigente: terminar entre los ${d.nt} primeros.`;
+          conf(3);
+          return `Ingresaron ${U.money(d.v)}. Nuevo objetivo: top ${d.nt}.`;
+        }
+        return 'Seguís con el objetivo original.';
+      },
+    },
+    veteran: {
+      cond: () => { const p = squad().find((x) => x.age >= 34 && x.cy <= 1 && x.t && !x.loan); return p && DT.G.week >= 25 ? { pid: p.id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: `${p.n} piensa en el retiro`,
+        body: `${p.n} (${p.age} años) te confiesa que está pensando en colgar los botines a fin de año. Es una voz importante en el vestuario.`,
+        opts: [['Convencerlo de seguir un año más', 'Renueva por un año con el mismo sueldo.'], ['Respetar su decisión', 'Se despide a fin de temporada.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.cy += 1; p.mor = Math.min(100, p.mor + 10); allMor(2); return `${p.n} renovó por un año más.`; }
+        allMor(1); return `${p.n} jugará sus últimos partidos con el club. El vestuario se lo agradece.`;
+      },
+    },
+    socialPost: {
+      cond: () => { const c = squad().filter((p) => p.mor < 50 && !p.loan); return c.length ? { pid: U.pick(c).id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: 'Polémica en redes',
+        body: `${p.n} publicó un mensaje criticando sus pocos minutos. Se hizo viral y los periodistas preguntan.`,
+        opts: [['Hablar en privado y darle más minutos', 'Se calma, pero el resto lo nota.'], ['Multarlo', 'Autoridad; él se enoja.'], ['Ignorar el tema', 'Puede seguir creciendo.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.mor = Math.min(100, p.mor + 15); allMor(-1); return `${p.n} se comprometió a hablar puertas adentro.`; }
+        if (i === 1) { const f = Math.round(p.w * 0.04); DT.E.add(team(), 'Multas', f); p.mor = Math.max(10, p.mor - 10); conf(1); return `${p.n} fue multado con ${U.money(f)}.`; }
+        if (U.chance(0.5)) { p.mor = Math.max(10, p.mor - 8); allMor(-2); return 'El tema siguió en los medios y enrareció el clima.'; }
+        return 'La polémica se apagó sola.';
+      },
+    },
+    pitchFlood: {
+      cond: () => { const m = nextUserMatch(); return m && m.h === DT.G.user && m.w === DT.G.week && !m.n ? {} : null; },
+      make: () => { const c = money(60000); return {
+        title: 'Tormenta sobre el estadio',
+        body: `Una tormenta dejó el campo anegado y dañó una tribuna. Repararlo de urgencia cuesta ${U.money(c)}.`,
+        opts: [[`Reparar ya (${U.money(c)})`, 'El partido se juega con público completo.'], ['Jugar igual', 'Una tribuna clausurada: menos recaudación.']],
+        c,
+      }; },
+      apply: (d, i) => {
+        const t = team();
+        if (i === 0) { DT.E.add(t, 'Mantenimiento', -d.c); return 'Las cuadrillas trabajaron toda la noche: el estadio está listo.'; }
+        t.anger = Math.max(t.anger || 0, 1); return 'Se juega con una tribuna clausurada.';
+      },
+    },
+    rivalTalks: {
+      cond: () => { const p = squad().filter((x) => x.age <= 23 && x.pot >= 78 && !x.loan).sort((a, b) => b.pot - a.pot)[0]; return p ? { pid: p.id } : null; },
+      make: (d) => { const p = DT.G.players[d.pid]; return {
+        title: `Le hablan al oído a ${p.n}`,
+        body: `Un club grande contactó a ${p.n} a espaldas tuyas y el chico está distraído. Cobra ${U.money(p.w)} por año y le quedan ${p.cy} ${p.cy === 1 ? 'año' : 'años'} de contrato.`,
+        opts: [[`Renovarlo con aumento (+30%, ${p.cy + 2} años)`, 'Asegurás a la promesa.'], ['Charla motivacional', 'Gratis, pero puede no alcanzar.'], ['Dejar que decida', 'Puede pedir irse.']],
+      }; },
+      apply: (d, i) => {
+        const p = DT.G.players[d.pid];
+        if (!p || p.t !== team().id) return 'El jugador ya no está en el club.';
+        if (i === 0) { p.w = U.round(p.w * 1.3, 1000); p.cy += 2; p.mor = Math.min(100, p.mor + 15); return `${p.n} renovó y está enfocado.`; }
+        if (i === 1) { if (U.chance(0.55)) { p.mor = Math.min(100, p.mor + 10); return `${p.n} se quedó tranquilo.`; } p.mor = Math.max(10, p.mor - 8); return `${p.n} sigue con la cabeza en otro lado.`; }
+        p.mor = Math.max(10, p.mor - 18); return `${p.n} está molesto y podría pedir salir.`;
+      },
+    },
   };
 
   Ev.weekly = function () {
@@ -268,7 +463,7 @@ DT.Ev = (function () {
       if (m.kind === 'event' && !m.done && m.actions && (G.week - m.w >= 3 || m.y !== G.year)) DT.Act.resolve(m.id, m.actions.length - 1);
     }
     if (G.inbox.some((m) => m.kind === 'event' && !m.done)) return;
-    if (!U.chance(0.3)) return;
+    if (!U.chance(0.35)) return;
     const now = G.year * 100 + G.week;
     const keys = U.shuffle(Object.keys(DEFS));
     for (const k of keys) {
