@@ -22,7 +22,7 @@
     const free = v === 'free';
     let ps = Object.values(G.players).filter((p) => (free ? !p.t : p.t && p.t !== t.id && !G.teams[p.t].eur));
     if (f.pos) ps = ps.filter((p) => p.pos === f.pos);
-    if (!free && f.cc) ps = ps.filter((p) => G.teams[p.t].cc === f.cc && G.teams[p.t].lg);
+    if (!free && f.cc) ps = ps.filter((p) => G.teams[p.t].cc === f.cc && DT.inLeague(G.teams[p.t]));
     if (f.age < 40) ps = ps.filter((p) => p.age <= f.age);
     if (f.minOvr) ps = ps.filter((p) => p.ovr >= f.minOvr);
     if (f.q) { const q = f.q.toLowerCase(); ps = ps.filter((p) => p.n.toLowerCase().includes(q)); }
@@ -126,7 +126,7 @@
     const ps = t.squad.map((id) => G.players[id]).sort(UI.byPos);
     const titles = (t.titles || []).slice(-8).reverse();
     UI.modal(`
-      <div class="row">${UI.badge(t, 'xl')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${t.eur ? 'Europa' : `${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].name)} · ${t.lg ? U.esc(DT.COUNTRIES[t.cc].league) : 'Segunda división'}`}</div></div></div>
+      <div class="row">${UI.badge(t, 'xl')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${t.eur ? 'Europa' : `${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].name)} · ${U.esc(DT.divName(t))}`}</div></div></div>
       ${t.eur ? '' : `<div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Socios</span><b>${U.num(t.socios)}</b></div><div><span>Estadio</span><b class="ellipsis" style="font-size:.95rem">${U.esc(t.stad)}</b></div><div><span>Capacidad</span><b>${U.num(t.cap)}</b></div><div><span>Formación</span><b>${t.tac.f}</b></div></div>`}
       ${titles.length ? `<div class="small">Títulos recientes: ${titles.map((x) => `${U.esc(x.c)} ${x.y}`).join(' · ')}</div>` : ''}
       <div class="list">${UI.grouped(ps, (p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`)}</div>`);
@@ -478,7 +478,8 @@
     const names = { LIB: 'Libertadores', SUD: 'Sudamericana', REC: 'Recopa', INT: 'Intercontinental' };
     const seasons = G.history.map((h) => {
       const main = ['LIB', 'SUD', 'REC', 'INT'].filter((k) => h.champs[k]).map((k) => `<div class="row between small"><span class="muted">${names[k]}</span><b>${U.esc(h.champs[k][1])}</b></div>`).join('');
-      const leagues = DT.COUNTRY_ORDER.map((cc) => h.champs['L_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].league)}</span><b>${U.esc(h.champs['L_' + cc][1])}</b></div>` : '').join('');
+      const leagues = DT.COUNTRY_ORDER.map((cc) => (h.champs['L_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].league)}</span><b>${U.esc(h.champs['L_' + cc][1])}</b></div>` : '')
+        + (h.champs['B_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].div2.name)}</span><b>${U.esc(h.champs['B_' + cc][1])}</b></div>` : '')).join('');
       const cups = DT.COUNTRY_ORDER.map((cc) => h.champs['C_' + cc] ? `<div class="row between small"><span class="muted">${DT.COUNTRIES[cc].flag} ${U.esc(DT.COUNTRIES[cc].cup)}</span><b>${U.esc(h.champs['C_' + cc][1])}</b></div>` : '').join('');
       const sc = h.scorers[t.cc] && h.scorers[t.cc][0];
       return `<section class="card"><div class="row between"><h3>Temporada ${h.y}</h3>${h.user ? `<span class="pill">${U.esc(h.user.team)}: ${h.user.pos}º</span>` : ''}</div>${main}<details><summary class="small" style="cursor:pointer;font-weight:600">Ligas y copas nacionales</summary><div class="stack" style="margin-top:8px">${leagues}${cups}</div></details>${sc ? `<div class="small muted">Goleador de ${DT.COUNTRIES[t.cc].name}: ${U.esc(sc[0])} (${U.esc(sc[1])}), ${sc[2]} goles.</div>` : ''}</section>`;
@@ -500,6 +501,7 @@
         <button class="btn block" data-a="exportSave">Exportar partida</button>
         <button class="btn block" data-a="importOpen">Importar partida</button>
       </section>
+      <section class="card"><h3>Dificultad</h3><div class="small">${G.settings.diff === 'real' ? '<b>Realista</b>: arrancaste en un club modesto y las ofertas de clubes más grandes dependen de tu reputación como DT.' : '<b>Arcade</b>: elegiste libremente el club.'} Se elige al empezar una partida nueva.</div></section>
       <section class="card"><h3>Pantalla</h3>
         <div class="small muted">El modo ordenador usa todo el ancho de la pantalla. Se recuerda en este dispositivo.</div>
         ${UI.layoutSwitch()}

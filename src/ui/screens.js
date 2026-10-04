@@ -24,8 +24,8 @@ DT.Screens = (function () {
       <div class="small">${M.obj ? U.esc(M.obj.text) : ''}</div>
     </section>`);
     // Tabla resumida
-    if (t.lg) {
-      const comp = G.season.comps['L_' + t.lg];
+    if (G.season.comps[DT.divOf(t)]) {
+      const comp = G.season.comps[DT.divOf(t)];
       const order = DT.S.sortTable(comp.table, comp.teams);
       const me = order.indexOf(t.id);
       const show = new Set([0, 1, 2, me - 1, me, me + 1].filter((i) => i >= 0 && i < order.length));
@@ -297,10 +297,12 @@ DT.Screens = (function () {
     const G = DT.G;
     const t = DT.userTeam();
     const SS = G.season;
-    if (!UI.compSel || !SS.comps[UI.compSel]) UI.compSel = t.lg ? 'L_' + t.lg : 'LIB';
+    if (!UI.compSel || (!SS.comps[UI.compSel] && !['OTH', 'CAL'].includes(UI.compSel))) UI.compSel = DT.divOf(t) || 'LIB';
     const cc = UI.compCountry || t.cc;
+    const hasB = !!SS.comps['B_' + cc];
     const chips = [
-      ['L_' + cc, 'Liga'],
+      ['L_' + cc, hasB ? 'Primera' : 'Liga'],
+      ...(hasB ? [['B_' + cc, 'Segunda']] : []),
       ['C_' + cc, 'Copa'],
       ['LIB', 'Libertadores'],
       ['SUD', 'Sudamericana'],
@@ -324,7 +326,10 @@ DT.Screens = (function () {
   };
   A.compCountry = (d) => {
     UI.compCountry = d.cc;
-    if (UI.compSel && (UI.compSel.startsWith('L_') || UI.compSel.startsWith('C_'))) UI.compSel = UI.compSel.slice(0, 2) + d.cc;
+    if (UI.compSel && /^[LBC]_/.test(UI.compSel)) {
+      UI.compSel = UI.compSel.slice(0, 2) + d.cc;
+      if (!DT.G.season.comps[UI.compSel]) UI.compSel = 'L_' + d.cc;
+    }
     UI.round = null;
     UI.render();
   };
@@ -339,14 +344,17 @@ DT.Screens = (function () {
     if (v === 'table') {
       const order = DT.S.sortTable(comp.table, comp.teams);
       const n = order.length;
+      const second = comp.div === 2;
       const rows = order.map((id, i) => {
         const r = comp.table[id], tm = G.teams[id];
-        const zone = i < C.lib ? 'lib' : i < C.lib + C.sud ? 'sud' : i >= n - C.rel ? 'rel' : '';
+        const zone = second ? (i < C.rel ? 'lib' : '') : i < C.lib ? 'lib' : i < C.lib + C.sud ? 'sud' : i >= n - C.rel ? 'rel' : '';
         return `<tr class="${DT.isUser(id) ? 'me' : ''}"><td class="zone ${zone}">${i + 1}</td><td class="team" data-a="team" data-id="${id}">${U.esc(tm.n)}</td><td>${r.pj}</td><td>${r.g}</td><td>${r.e}</td><td>${r.p}</td><td>${r.gf - r.gc > 0 ? '+' : ''}${r.gf - r.gc}</td><td><b>${r.pts}</b></td></tr>`;
       }).join('');
       body = `<section class="card"><h3>${U.esc(comp.name)} ${G.year}</h3><div class="tablewrap"><table><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>DG</th><th>Pts</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <div class="legend"><span><i style="background:var(--lib)"></i>Libertadores</span><span><i style="background:var(--sud)"></i>Sudamericana</span><span><i style="background:var(--rel)"></i>Descenso</span></div>
-        <div class="tiny muted">El campeón de la ${U.esc(C.cup)} también clasifica a la Libertadores.</div></section>`;
+        ${second
+    ? `<div class="legend"><span><i style="background:var(--lib)"></i>Ascenso a ${U.esc(C.league)}</span></div><div class="tiny muted">Suben los ${C.rel} primeros. En la segunda división no hay descenso.</div></section>`
+    : `<div class="legend"><span><i style="background:var(--lib)"></i>Libertadores</span><span><i style="background:var(--sud)"></i>Sudamericana</span><span><i style="background:var(--rel)"></i>Descenso${C.div2 ? ` a ${U.esc(C.div2.name)}` : ''}</span></div>
+        <div class="tiny muted">El campeón de la ${U.esc(C.cup)} también clasifica a la Libertadores.</div></section>`}`;
     } else if (v === 'round') {
       const all = Object.values(G.season.matches).filter((m) => m.c === comp.id);
       const nextR = (all.filter((m) => !m.p).sort((a, b) => a.st - b.st)[0] || { st: comp.rounds }).st;
@@ -356,7 +364,7 @@ DT.Screens = (function () {
         <div class="row between"><button class="btn sm" data-a="round" data-v="${r - 1}" ${r <= 1 ? 'disabled' : ''}>◀</button><h3>Fecha ${r} <span class="small muted">· semana ${ms[0] ? ms[0].w : ''}</span></h3><button class="btn sm" data-a="round" data-v="${r + 1}" ${r >= comp.rounds ? 'disabled' : ''}>▶</button></div>
         <div class="list">${ms.map(Sc.resultRow).join('')}</div></section>`;
     } else {
-      const ps = Object.values(G.players).filter((p) => p.t && G.teams[p.t].lg === comp.cc && p.st.g > 0).sort((a, b) => b.st.g - a.st.g || a.st.pj - b.st.pj).slice(0, 20);
+      const ps = Object.values(G.players).filter((p) => p.t && DT.divOf(G.teams[p.t]) === comp.id && p.st.g > 0).sort((a, b) => b.st.g - a.st.g || a.st.pj - b.st.pj).slice(0, 20);
       body = `<section class="card"><h3>Goleadores</h3><div class="list">${ps.map((p, i) => `<div class="li" data-a="player" data-id="${p.id}"><span class="muted tab-nums" style="width:20px">${i + 1}</span>${UI.badge(G.teams[p.t], 's')}<div class="name">${U.esc(p.n)}<div class="sub">${U.esc(G.teams[p.t].n)} · ${p.st.pj} PJ · ${p.st.a} asist.</div></div><span class="ovr">${p.st.g}</span></div>`).join('') || '<div class="empty small">Todavía no hubo goles.</div>'}</div></section>`;
     }
     return seg + body;

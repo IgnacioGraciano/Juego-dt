@@ -10,6 +10,7 @@ DT.End = (function () {
     const finalPos = {};
     const qual = { LIB: [], SUD: [] };
     const relegatedAll = [];
+    const promotedAll = [];
     const userTeam = DT.userTeam();
 
     // Ligas
@@ -46,6 +47,17 @@ DT.End = (function () {
       // descensos
       const rel = order.slice(order.length - C.rel);
       relegatedAll.push(...rel.map((tid) => ({ tid, cc })));
+      // segunda división: campeón, posiciones y ascensos
+      const c2 = SS.comps['B_' + cc];
+      if (c2) {
+        const o2 = DT.S.sortTable(c2.table, c2.teams);
+        o2.forEach((tid, i) => (finalPos[tid] = i + 1));
+        G.prevTables['B_' + cc] = o2.slice();
+        DT.S.title(o2[0], c2.name);
+        hist.champs['B_' + cc] = [o2[0], G.teams[o2[0]].n];
+        o2.forEach((tid, i) => DT.E.prize(G.teams[tid], C.leaguePrize * 1e6 * 0.15 * Math.pow(1 - i / o2.length, 2), i === 0 ? `${c2.name}: campeón` : null));
+        promotedAll.push(...o2.slice(0, C.rel).map((tid) => ({ tid, cc })));
+      }
     }
     for (const id of ['LIB', 'SUD', 'REC', 'INT']) {
       const c = SS.comps[id];
@@ -60,29 +72,43 @@ DT.End = (function () {
     // Evaluación del DT
     const userPos = finalPos[G.user];
     const userRelegated = relegatedAll.some((r) => r.tid === G.user);
-    hist.user = { team: userTeam.n, pos: userPos, of: SS.comps['L_' + userTeam.lg] ? SS.comps['L_' + userTeam.lg].teams.length : 0 };
-    End.reputation(finalPos, relegatedAll);
+    const userComp = SS.comps[DT.divOf(userTeam)];
+    hist.user = { team: userTeam.n, pos: userPos, of: userComp ? userComp.teams.length : 0, div: userComp ? userComp.name : '' };
+    const userPromoted = promotedAll.some((r) => r.tid === G.user);
+    End.reputation(finalPos, relegatedAll, promotedAll);
 
     // Ascensos y descensos
     for (const cc of DT.COUNTRY_ORDER) {
       const C = DT.COUNTRIES[cc];
       const rel = relegatedAll.filter((r) => r.cc === cc).map((r) => r.tid);
-      rel.forEach((tid) => (G.teams[tid].lg = null));
-      const pool = Object.values(G.teams).filter((t) => t.cc === cc && !t.lg && !rel.includes(t.id));
       const up = [];
-      for (let i = 0; i < rel.length && pool.length; i++) {
-        const t = U.weighted(pool, pool.map((x) => Math.pow(x.rep - 40, 2)));
-        pool.splice(pool.indexOf(t), 1);
-        t.lg = cc;
-        up.push(t);
-        DT.W.fillSquad(t, { P: 3, D: 7, M: 7, A: 5 });
+      if (SS.comps['B_' + cc]) {
+        // con segunda división: suben los primeros de la tabla y los que bajan juegan la segunda
+        rel.forEach((tid) => { G.teams[tid].lg = null; G.teams[tid].d2 = cc; });
+        for (const r of promotedAll.filter((x) => x.cc === cc)) {
+          const t = G.teams[r.tid];
+          t.d2 = null;
+          t.lg = cc;
+          up.push(t);
+          DT.W.fillSquad(t);
+        }
+      } else {
+        rel.forEach((tid) => (G.teams[tid].lg = null));
+        const pool = Object.values(G.teams).filter((t) => t.cc === cc && !t.lg && !t.d2 && !rel.includes(t.id));
+        for (let i = 0; i < rel.length && pool.length; i++) {
+          const t = U.weighted(pool, pool.map((x) => Math.pow(x.rep - 40, 2)));
+          pool.splice(pool.indexOf(t), 1);
+          t.lg = cc;
+          up.push(t);
+          DT.W.fillSquad(t, { P: 3, D: 7, M: 7, A: 5 });
+        }
       }
       DT.news(`${DT.COUNTRIES[cc].league}: descienden ${rel.map((id) => G.teams[id].n).join(' y ')}. Ascienden ${up.map((t) => t.n).join(' y ')}.`, 'world');
       hist.champs['REL_' + cc] = rel.map((id) => G.teams[id].n);
       hist.champs['UP_' + cc] = up.map((t) => t.n);
     }
 
-    DT.Board.seasonEnd(userPos, userRelegated);
+    DT.Board.seasonEnd(userPos, userRelegated, userPromoted);
 
     // Finanzas: cierre del ejercicio
     for (const id in G.teams) if (!G.teams[id].eur) DT.E.closeSeason(G.teams[id]);
@@ -130,7 +156,7 @@ DT.End = (function () {
     }
   };
 
-  End.reputation = function (finalPos, relegated) {
+  End.reputation = function (finalPos, relegated, promoted) {
     const G = DT.G;
     for (const cc of DT.COUNTRY_ORDER) {
       const ids = Object.values(G.teams).filter((t) => t.lg === cc).sort((a, b) => b.rep - a.rep).map((t) => t.id);
@@ -144,6 +170,7 @@ DT.End = (function () {
       });
     }
     for (const r of relegated) G.teams[r.tid].rep = Math.max(45, G.teams[r.tid].rep - 3);
+    for (const r of promoted || []) G.teams[r.tid].rep = Math.min(99, Math.max(G.teams[r.tid].rep + 3, 58));
     const SS = G.season;
     for (const [id, bonus] of [['LIB', 3], ['SUD', 2], ['INT', 2], ['REC', 1]]) {
       const c = SS.comps[id];
@@ -152,7 +179,7 @@ DT.End = (function () {
     // los equipos de la B tienden a un nivel medio
     for (const id in G.teams) {
       const t = G.teams[id];
-      if (!t.lg && !t.eur) t.rep += (58 - t.rep) * 0.1;
+      if (!t.lg && !t.eur) t.rep += ((t.d2 ? 57 : 52) - t.rep) * 0.1;
     }
   };
 
@@ -186,12 +213,14 @@ DT.End = (function () {
       }
     }
     // Joyas de inferiores que esperaban a fin de temporada
+    const promotedKids = [];
     for (const y of G.pendingYouth || []) {
       const t = G.teams[y.t];
       if (!t || !DT.isUser(t.id)) continue;
       const p = DT.P.create({ n: y.n, pos: y.pos, age: y.age + 1, ovr: y.ovr, pot: y.pot, t: t.id, cy: 4, yt: true });
       p.w = 15000;
       t.squad.push(p.id);
+      promotedKids.push(p.id);
     }
     G.pendingYouth = [];
     // IA: renovaciones, juveniles y completar planteles
@@ -207,6 +236,8 @@ DT.End = (function () {
         kids.push(k);
       }
       if (DT.isUser(id)) {
+        // aviso en pantalla con los juveniles que subieron al plantel
+        G.notices = (G.notices || []).concat([{ kind: 'youth', title: 'Suben juveniles al primer equipo', pids: promotedKids.concat(kids.map((k) => k.id)) }]);
         DT.inbox({ title: 'Suben juveniles de la cantera', body: kids.map((k) => `${k.n} (${U.posName[k.pos]}, ${k.age} años, media ${k.ovr}, potencial ${'★'.repeat(DT.P.stars(k.pot))})`).join('. ') + '.', kind: 'squad' });
       } else {
         DT.AI.ensureSquad(t);

@@ -5,7 +5,8 @@ DT.Board = (function () {
 
   B.leagueRank = function (team) {
     const G = DT.G;
-    const ids = Object.values(G.teams).filter((t) => t.lg === team.lg).sort((a, b) => DT.AI.rating(b) + b.rep * 0.05 - (DT.AI.rating(a) + a.rep * 0.05));
+    const div = DT.divOf(team);
+    const ids = Object.values(G.teams).filter((t) => DT.divOf(t) === div).sort((a, b) => DT.AI.rating(b) + b.rep * 0.05 - (DT.AI.rating(a) + a.rep * 0.05));
     return { rank: ids.findIndex((t) => t.id === team.id) + 1, n: ids.length };
   };
 
@@ -13,6 +14,14 @@ DT.Board = (function () {
     const C = DT.COUNTRIES[team.cc];
     const { rank, n } = B.leagueRank(team);
     let o;
+    if (team.d2) {
+      // segunda división: el objetivo gira alrededor del ascenso (no hay descenso)
+      if (rank <= C.rel + 1) o = { target: C.rel, text: `Ascender a ${C.league}: terminar entre los ${C.rel} primeros de la ${C.div2.name}.` };
+      else if (rank <= Math.ceil(n * 0.4)) o = { target: Math.max(C.rel + 2, 6), text: `Pelear el ascenso: terminar entre los ${Math.max(C.rel + 2, 6)} primeros.` };
+      else o = { target: Math.ceil(n / 2), text: `Terminar en la mitad de arriba de la ${C.div2.name} (top ${Math.ceil(n / 2)}).` };
+      o.rank = rank;
+      return o;
+    }
     if (rank <= 2) o = { target: 2, text: 'Pelear el campeonato: terminar entre los 2 primeros de la liga.' };
     else if (rank <= C.lib) o = { target: C.lib, text: `Clasificar a la Copa Libertadores: terminar entre los ${C.lib} primeros.` };
     else if (rank <= C.lib + C.sud) o = { target: C.lib + C.sud, text: `Clasificar a una copa internacional: terminar entre los ${C.lib + C.sud} primeros.` };
@@ -130,7 +139,7 @@ DT.Board = (function () {
   B.jobOffers = function (excludeId, fired) {
     const G = DT.G;
     const rep = G.manager.rep;
-    const pool = Object.values(G.teams).filter((t) => t.lg && t.id !== excludeId && t.id !== G.user);
+    const pool = Object.values(G.teams).filter((t) => DT.inLeague(t) && t.id !== excludeId && t.id !== G.user);
     const max = fired ? rep + 2 : rep + 8;
     const min = fired ? rep - 30 : rep - 6;
     let cands = pool.filter((t) => t.rep <= max && t.rep >= min);
@@ -153,7 +162,7 @@ DT.Board = (function () {
   };
 
   // Evaluación de fin de temporada (antes de ascensos/descensos).
-  B.seasonEnd = function (finalPos, relegated) {
+  B.seasonEnd = function (finalPos, relegated, promoted) {
     const G = DT.G;
     const M = G.manager;
     const t = DT.userTeam();
@@ -162,6 +171,10 @@ DT.Board = (function () {
     if (relegated) {
       M.conf = 0;
       msg = `${t.n} descendió. La directiva te despide.`;
+    } else if (promoted) {
+      M.conf = Math.min(100, M.conf + 35);
+      M.rep = Math.min(100, M.rep + 6);
+      msg = `¡Ascenso! ${t.n} terminó ${finalPos}º y vuelve a jugar en ${DT.COUNTRIES[t.cc].league}. La directiva está feliz.`;
     } else if (o && finalPos <= o.target) {
       M.conf = Math.min(100, M.conf + 25);
       M.rep = Math.min(100, M.rep + (finalPos < o.target ? 4 : 2));

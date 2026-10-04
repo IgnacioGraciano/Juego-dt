@@ -5,7 +5,25 @@ DT.Main = (function () {
   const A = UI.A;
   const Main = { downloads: null };
   let saveCount = 0;
-  const start = { step: 1, cc: 'ARG', name: '', team: null };
+  const start = { step: 1, cc: 'ARG', name: '', team: null, diff: 'arcade' };
+  const DIFFS = [
+    ['arcade', 'Arcade', 'Elegís cualquier club, de los grandes a los chicos.'],
+    ['real', 'Realista', 'Arrancás en un club modesto y hacés carrera hasta llegar a los grandes.'],
+  ];
+  // Clubes para empezar: en modo realista solo la segunda división y los más modestos de primera.
+  Main.startClubs = function (cc, diff) {
+    const C = DT.COUNTRIES[cc];
+    const mk = (r, div) => ({ code: r[0], n: r[1], s: r[2], stad: r[3], cap: r[4], rep: r[5], c1: r[6], c2: r[7], div, id: cc + '_' + r[0], cc });
+    const first = DT.TEAMS[cc].map((r) => mk(r, 1)).sort((a, b) => b.rep - a.rep);
+    const second = ((DT.TEAMS2 || {})[cc] || []).map((r) => mk(r, 2)).sort((a, b) => b.rep - a.rep);
+    if (diff === 'real') {
+      const k = Math.ceil(first.length * (second.length ? 0.2 : 0.3));
+      const cut = first[first.length - k].rep;
+      first.forEach((x) => (x.ok = x.rep <= cut));
+      second.forEach((x) => (x.ok = true));
+    } else first.concat(second).forEach((x) => (x.ok = true));
+    return { first, second, C };
+  };
 
   Main.autosave = async function (force) {
     if (!DT.G) return false;
@@ -57,6 +75,8 @@ DT.Main = (function () {
           <h2>Nueva partida</h2>
           <label class="small" for="mgrname">Tu nombre de entrenador</label>
           <input type="text" id="mgrname" maxlength="30" placeholder="Ej: Marcelo Gallardo" value="${U.esc(start.name)}">
+          <span class="up">Dificultad</span>
+          <div class="diffpick">${DIFFS.map(([k, l, d]) => `<button class="${start.diff === k ? 'on' : ''}" data-a="stDiff" data-v="${k}" aria-pressed="${start.diff === k}"><b>${l}</b><span>${d}</span></button>`).join('')}</div>
           <span class="up">Elegí el país</span>
           <div class="chips" style="flex-wrap:wrap">${DT.COUNTRY_ORDER.map((cc) => `<button class="chip ${start.cc === cc ? 'on' : ''}" data-a="stCountry" data-cc="${cc}">${DT.COUNTRIES[cc].flag} ${DT.COUNTRIES[cc].name}</button>`).join('')}</div>
           <button class="btn primary block" data-a="stNext">Elegir club</button>
@@ -64,16 +84,19 @@ DT.Main = (function () {
         <section class="card flat small muted">Tu partida se guarda sola en este dispositivo. Desde Club → Partida podés exportarla como copia de seguridad.</section>`;
       return;
     }
-    const C = DT.COUNTRIES[start.cc];
-    const rows = DT.TEAMS[start.cc].map((r) => ({ code: r[0], n: r[1], s: r[2], stad: r[3], cap: r[4], rep: r[5], c1: r[6], c2: r[7] })).sort((a, b) => b.rep - a.rep);
-    const diff = (rep) => (rep >= 85 ? ['Grande', 'gold'] : rep >= 74 ? ['Competitivo', 'ok'] : rep >= 64 ? ['Medio', ''] : ['Chico: difícil', 'warn']);
+    const { first, second, C } = Main.startClubs(start.cc, start.diff);
+    const real = start.diff === 'real';
+    const diff = (r) => (r.div === 2 ? ['Ascenso', ''] : r.rep >= 85 ? ['Grande', 'gold'] : r.rep >= 74 ? ['Competitivo', 'ok'] : r.rep >= 64 ? ['Medio', ''] : ['Chico: difícil', 'warn']);
+    const list = (rows) => rows.filter((r) => r.ok).map((r) => {
+      const [lbl, cls] = diff(r);
+      return `<div class="li" data-a="stPick" data-code="${r.code}">${UI.badge(r)}<div class="name">${U.esc(r.n)}<div class="sub">${U.esc(r.stad)} · ${U.num(r.cap)}</div></div><span class="pill ${cls}">${lbl}</span></div>`;
+    }).join('');
+    const block = (title, rows, note) => (rows.some((r) => r.ok) ? `<section class="card"><h3>${U.esc(title)}</h3>${note ? `<div class="small muted">${note}</div>` : ''}<div class="list">${list(rows)}</div></section>` : '');
     main.innerHTML = `
-      <div class="row between"><button class="btn sm" data-a="stBack">◀ Volver</button><h2>${C.flag} ${U.esc(C.league)}</h2></div>
-      <div class="small muted">Los clubes grandes tienen más plata y planteles fuertes, pero la directiva exige títulos. Los chicos son un desafío financiero.</div>
-      <section class="card"><div class="list">${rows.map((r) => {
-        const [lbl, cls] = diff(r.rep);
-        return `<div class="li" data-a="stPick" data-code="${r.code}">${UI.badge({ c1: r.c1, c2: r.c2, s: r.s })}<div class="name">${U.esc(r.n)}<div class="sub">${U.esc(r.stad)} · ${U.num(r.cap)}</div></div><span class="pill ${cls}">${lbl}</span></div>`;
-      }).join('')}</div></section>`;
+      <div class="row between"><button class="btn sm" data-a="stBack">◀ Volver</button><h2>${C.flag} ${U.esc(C.name)}</h2></div>
+      <div class="small muted">${real ? 'Modo realista: solo podés arrancar en clubes modestos. Con buenas campañas te van a llamar clubes más grandes.' : 'Los clubes grandes tienen más plata y planteles fuertes, pero la directiva exige títulos. Los chicos son un desafío financiero.'}</div>
+      ${block(C.league, first, real ? 'Los más modestos de primera: pelean por no descender.' : '')}
+      ${C.div2 ? block(C.div2.name, second, `Segunda división: suben los ${C.rel} primeros.`) : ''}`;
   }
   // vuelve a dibujar la pantalla inicial (al cambiar entre modo celular y ordenador)
   Main.refreshStart = async function () {
@@ -91,10 +114,15 @@ DT.Main = (function () {
     renderStart();
     window.scrollTo(0, 0);
   };
+  A.stDiff = (d) => {
+    start.name = (document.getElementById('mgrname') || {}).value || start.name;
+    start.diff = d.v === 'real' ? 'real' : 'arcade';
+    renderStart(DT.Save.localMeta(), null);
+  };
   A.stBack = () => { start.step = 1; renderStart(DT.Save.localMeta(), null); };
   A.stPick = (d) => {
     const name = (start.name || '').trim() || 'El Profe';
-    DT.W.newGame(start.cc + '_' + d.code, name);
+    DT.W.newGame(start.cc + '_' + d.code, name, start.diff);
     UI.tab = 'home';
     Main.autosave(true);
     UI.render();
@@ -155,11 +183,12 @@ DT.Main = (function () {
     const names = { LIB: 'Copa Libertadores', SUD: 'Copa Sudamericana', REC: 'Recopa', INT: 'Intercontinental' };
     const myTitles = G.manager.titles.filter((x) => x.y === h.y);
     UI.modal(`<span class="kicker">Fin de temporada ${h.y}</span>
-      <h2>${myTitles.length ? `¡${myTitles.length} ${myTitles.length === 1 ? 'título' : 'títulos'} para ${U.esc(h.user.team)}!` : `${U.esc(h.user.team)} terminó ${h.user.pos}º`}</h2>
+      <h2>${myTitles.length ? `¡${myTitles.length} ${myTitles.length === 1 ? 'título' : 'títulos'} para ${U.esc(h.user.team)}!` : `${U.esc(h.user.team)} terminó ${h.user.pos}º${h.user.div ? ` en ${U.esc(h.user.div)}` : ''}`}</h2>
       ${myTitles.length ? `<div class="stack">${myTitles.map((x) => `<span class="pill gold">${U.esc(x.c)}</span>`).join('')}</div>` : ''}
       <section class="card">
         ${Object.keys(names).filter((k) => h.champs[k]).map((k) => `<div class="row between small"><span class="muted">${names[k]}</span><b>${U.esc(h.champs[k][1])}</b></div>`).join('')}
         ${h.champs['L_' + cc] ? `<div class="row between small"><span class="muted">${U.esc(DT.COUNTRIES[cc].league)}</span><b>${U.esc(h.champs['L_' + cc][1])}</b></div>` : ''}
+        ${h.champs['B_' + cc] ? `<div class="row between small"><span class="muted">${U.esc(DT.COUNTRIES[cc].div2.name)}</span><b>${U.esc(h.champs['B_' + cc][1])}</b></div>` : ''}
         ${h.champs['C_' + cc] ? `<div class="row between small"><span class="muted">${U.esc(DT.COUNTRIES[cc].cup)}</span><b>${U.esc(h.champs['C_' + cc][1])}</b></div>` : ''}
         ${h.scorers[cc] && h.scorers[cc][0] ? `<div class="row between small"><span class="muted">Goleador</span><b>${U.esc(h.scorers[cc][0][0])} (${h.scorers[cc][0][2]})</b></div>` : ''}
         ${h.champs['REL_' + cc] ? `<div class="small muted">Descienden: ${h.champs['REL_' + cc].map(U.esc).join(', ')}. Ascienden: ${(h.champs['UP_' + cc] || []).map(U.esc).join(', ')}.</div>` : ''}

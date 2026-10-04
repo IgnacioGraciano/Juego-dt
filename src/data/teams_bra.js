@@ -1,4 +1,4 @@
-// Brasileirão Série A. Planteles aproximados (temporada 2025/26).
+// Brasileirão Série A 2026. Planteles aproximados (temporada 2025/26).
 DT.TEAMS.BRA = [
   ['FLA', 'Flamengo', 'FLA', 'Maracanã', 78838, 97, '#c8102e', '#111111',
     'Agustín Rossi/P/30/79|Matheus Cunha/P/24/70|Guillermo Varela/D/33/75|Emerson Royal/D/27/76|Léo Ortiz/D/30/78|Léo Pereira/D/30/78|Danilo/D/34/76|Alex Sandro/D/35/75|Ayrton Lucas/D/28/75|Erick Pulgar/M/32/76|Jorginho/M/34/79|Saúl Ñíguez/M/31/77|Allan/M/29/72|Nicolás de la Cruz/M/29/78|Giorgian de Arrascaeta/M/32/83|Jorge Carrascal/M/28/77|Luiz Araújo/A/29/76|Everton Cebolinha/A/30/75|Samuel Lino/A/26/78|Gonzalo Plata/A/25/77|Bruno Henrique/A/35/76|Pedro/A/29/80|Wallace Yan/A/21/70'],
@@ -32,12 +32,8 @@ DT.TEAMS.BRA = [
     'Lucas Arcanjo/P/27/73|Raúl Cáceres/D/34/70|Lucas Halter/D/25/71|Jamerson/D/31/69|Willian Oliveira/M/32/71|Ricardo Ryller/M/29/70|Matheuzinho/M/25/71|Gabriel Baralhas/M/28/70|Renato Kayzer/A/30/73|Osvaldo/A/38/70|Carlinhos/A/30/70|Aitor Cantalapiedra/A/29/71|Lucas Braga/A/29/70'],
   ['INT', 'Internacional', 'INT', 'Beira-Rio', 50128, 87, '#d50000', '#ffffff',
     'Sergio Rochet/P/33/77|Anthoni/P/25/72|Braian Aguirre/D/25/73|Bruno Gomes/D/24/72|Vitão/D/25/74|Gabriel Mercado/D/39/71|Alexandro Bernabei/D/25/76|Fernando/M/38/72|Thiago Maia/M/28/74|Bruno Henrique/M/36/72|Rômulo/M/24/72|Alan Patrick/M/34/77|Óscar Romero/M/33/72|Johan Carbonero/A/25/74|Vitinho/A/31/72|Enner Valencia/A/36/74|Rafael Borré/A/30/76|Ricardo Mathias/A/21/70'],
-  ['CEA', 'Ceará', 'CEA', 'Castelão', 63903, 73, '#111111', '#ffffff',
-    'Richard/P/34/71|Marllon/D/33/71|Willian Machado/D/30/70|Matheus Bahia/D/26/70|Dieguinho/M/26/71|Lourenço/M/28/70|Fernando Sobral/M/30/71|Lucas Mugni/M/33/72|Pedro Raul/A/29/73|Galeano/A/32/71|Aylon/A/33/70'],
-  ['FOR', 'Fortaleza', 'FOR', 'Castelão', 63903, 79, '#0a3a8c', '#d50000',
-    'João Ricardo/P/37/74|Emanuel Brítez/D/32/74|Tinga/D/33/72|Benjamín Kuscevic/D/29/72|Titi/D/37/70|Bruno Pacheco/D/34/70|Lucas Sasha/M/35/72|Zé Welison/M/30/71|Tomás Pochettino/M/29/74|Matheus Rossetto/M/29/71|Kervin Andrade/M/21/72|Marinho/A/35/71|Breno Lopes/A/30/71|Juan Martín Lucero/A/34/75|Moisés/A/30/72'],
-  ['JUV', 'Juventude', 'JUV', 'Alfredo Jaconi', 19924, 67, '#0b6b3a', '#ffffff',
-    'Gustavo/P/30/70|Rodrigo Sam/D/28/70|Wilker Ángel/D/32/70|Alan Ruschel/D/36/69|Jadson/M/33/70|Caíque/M/28/70|Mandaca/M/25/70|Nenê/M/44/67|Gilberto/A/36/70|Emerson Batalla/A/32/70|Taliari/A/30/69'],
-  ['SPO', 'Sport Recife', 'SPO', 'Ilha do Retiro', 26418, 71, '#d50000', '#111111',
-    'Caíque França/P/30/70|Rafael Thyere/D/32/70|Igor Cariús/D/32/69|Lucas Lima/M/35/71|Christian Rivera/M/28/70|Sérgio Oliveira/M/33/71|Pablo/A/34/70|Gonzalo Barreto/A/33/70|Derik Lacerda/A/26/69|Romarinho/A/34/70'],
+  ['CFC', 'Coritiba', 'CFC', 'Couto Pereira', 40500, 70, '#0a6b3a', '#ffffff'],
+  ['CAP', 'Athletico Paranaense', 'CAP', 'Ligga Arena', 42370, 76, '#c8102e', '#111111'],
+  ['CHP', 'Chapecoense', 'CHA', 'Arena Condá', 20000, 66, '#0b8a3e', '#ffffff'],
+  ['REM', 'Remo', 'REM', 'Baenão', 17500, 64, '#0b1f5c', '#ffffff'],
 ];

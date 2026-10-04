@@ -64,6 +64,10 @@ DT.team = (id) => DT.G.teams[id];
 DT.player = (id) => DT.G.players[id];
 DT.userTeam = () => DT.G.teams[DT.G.user];
 DT.isUser = (tid) => DT.G && DT.G.user === tid;
+// División de un club: 'L_ARG' (primera), 'B_ARG' (segunda) o null (sin liga profesional).
+DT.divOf = (t) => (t.lg ? 'L_' + t.lg : t.d2 ? 'B_' + t.d2 : null);
+DT.inLeague = (t) => !!(t.lg || t.d2);
+DT.divName = (t) => (t.lg ? DT.COUNTRIES[t.cc].league : t.d2 ? DT.COUNTRIES[t.cc].div2.name : 'Sin liga profesional');
 
 // Noticias e inbox.
 DT.news = function (text, kind) {

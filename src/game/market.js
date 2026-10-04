@@ -195,7 +195,7 @@ DT.M = (function () {
     const G = DT.G;
     const p = G.players[pid];
     const me = DT.userTeam();
-    const cands = Object.values(G.teams).filter((t) => t.lg && !t.eur && t.id !== me.id && t.rep <= me.rep + 4 && t.squad.length < 32 && DT.W.teamLevel(t) <= p.ovr + 6 && t.cash > p.w * 0.5);
+    const cands = Object.values(G.teams).filter((t) => DT.inLeague(t) && !t.eur && t.id !== me.id && t.rep <= me.rep + 4 && t.squad.length < 32 && DT.W.teamLevel(t) <= p.ovr + 6 && t.cash > p.w * 0.5);
     U.shuffle(cands);
     return cands.slice(0, 3).map((t) => ({ tid: t.id, fee: U.round(DT.P.value(p) * U.rf(0, 0.06), 5000), starter: DT.W.teamLevel(t) <= p.ovr + 1 }));
   };
@@ -268,7 +268,7 @@ DT.M = (function () {
       if (G.week === 5 || G.week === 27) M.windowClose();
       return;
     }
-    const teams = Object.values(G.teams).filter((t) => !t.eur && t.lg);
+    const teams = Object.values(G.teams).filter((t) => !t.eur && DT.inLeague(t));
     // Ventas al exterior
     for (const t of teams) {
       if (DT.isUser(t.id)) continue;
