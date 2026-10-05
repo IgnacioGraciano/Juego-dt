@@ -43,7 +43,6 @@ DT.Main = (function () {
     UI.compCountry = null;
     UI.closeModal();
     document.getElementById('overlay').hidden = true;
-    if (DT.G.pendingOffers) Main.showJobs();
     UI.render();
   };
 
@@ -69,7 +68,7 @@ DT.Main = (function () {
           <div class="muted">Dirigí a tu club en las 10 ligas de Sudamérica, la Libertadores y la Sudamericana.</div>
           ${UI.layoutSwitch()}
         </div>
-        ${meta ? `<section class="card"><span class="up">Partida guardada</span><div><b>${U.esc(meta.team)}</b> · ${U.esc(meta.mgr)} · temporada ${meta.year}, semana ${meta.week}</div><button class="btn primary block big" data-a="loadLocal">Continuar partida</button></section>` : ''}
+        ${meta ? `<section class="card"><span class="up">Partida guardada</span><div><b>${U.esc(meta.team)}</b> · ${U.esc(meta.mgr)} · temporada ${meta.year}, semana ${meta.week}${meta.retired ? ' · <span class="pill">Retirado</span>' : meta.fired ? ' · <span class="pill bad">Sin club</span>' : ''}</div><button class="btn primary block big" data-a="loadLocal">${meta.retired ? 'Ver resumen de la carrera' : 'Continuar partida'}</button></section>` : ''}
         ${cloudMeta && (!meta || cloudMeta.at > meta.at) ? `<section class="card"><span class="up">En tu cuenta</span><div><b>${U.esc(cloudMeta.team)}</b> · temporada ${cloudMeta.year}, semana ${cloudMeta.week}</div><button class="btn block" data-a="loadCloud">Cargar desde la nube</button></section>` : ''}
         <section class="card">
           <h2>Nueva partida</h2>
@@ -164,7 +163,7 @@ DT.Main = (function () {
       Main.showSeasonSummary(G.history[0]);
       UI.render();
     } else if (ev.type === 'jobs') {
-      Main.showJobs();
+      Main.autosave(true);
       UI.render();
     } else {
       if (ev.type === 'inbox') {
@@ -197,21 +196,79 @@ DT.Main = (function () {
       <button class="btn primary block" data-a="closeModal">Seguir</button>`);
   };
 
-  Main.showJobs = function () {
+  // ---------- despido y retiro ----------
+  // Pantalla completa: mientras estás sin club no se puede tocar nada del equipo anterior.
+  let careerView = 'main';
+  const careerStats = () => {
+    const M = DT.G.manager;
+    return `<div class="kv"><div><span>Partidos</span><b>${M.pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${M.g}-${M.e}-${M.p}</b></div><div><span>Títulos</span><b>${M.titles.length}</b></div><div><span>Reputación</span><b>${Math.round(M.rep)}</b></div><div><span>Clubes</span><b>${M.clubs.length}</b></div><div><span>Desde</span><b>${M.since}</b></div></div>`;
+  };
+  const careerList = () => {
+    const M = DT.G.manager;
+    const rows = M.career.filter((c) => !c.y).slice().reverse();
+    return rows.length ? `<div class="list">${rows.map((c) => `<div class="li"><div class="name">${U.esc(c.club)}<div class="sub">${c.from}–${c.to} · ${U.esc(c.why)}</div></div></div>`).join('')}</div>` : '';
+  };
+  function showOverlay(html) {
+    const el = document.getElementById('overlay');
+    el.innerHTML = `<div class="wrap career">${html}</div>`;
+    el.hidden = false;
+    el.scrollTop = 0;
+    document.getElementById('tabs').hidden = true;
+    document.getElementById('cta').innerHTML = '';
+  }
+  Main.showCareerScreen = function () {
     const G = DT.G;
+    const M = G.manager;
+    UI.closeModal();
+    if (G.retired) {
+      showOverlay(`<div class="hero"><svg class="trophy" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true"><path d="M20 8h24v14a12 12 0 0 1-24 0z"/><path d="M20 12h-8a8 8 0 0 0 10 12M44 12h8a8 8 0 0 1-10 12"/><path d="M32 34v10M24 56h16M26 44h12v12H26z"/></svg>
+        <span class="kicker">Fin de la carrera · ${G.retired.y}</span><h1>${U.esc(M.n)}</h1><div class="muted">Colgó el buzo de entrenador después de ${G.retired.y - M.since + 1} ${G.retired.y - M.since ? 'temporadas' : 'temporada'}.</div></div>
+        <section class="card">${careerStats()}</section>
+        <section class="card"><h3>Títulos</h3>${M.titles.length ? `<div class="list">${M.titles.map((x) => `<div class="li"><span class="pill gold">${x.y}</span><div class="name">${U.esc(x.c)}<div class="sub">${U.esc(x.t)}</div></div></div>`).join('')}</div>` : '<div class="small muted">Sin títulos.</div>'}</section>
+        ${careerList() ? `<section class="card"><h3>Trayectoria</h3>${careerList()}</section>` : ''}
+        <button class="btn primary block big" data-a="newCareer">Empezar una nueva partida</button>`);
+      return;
+    }
     const po = G.pendingOffers;
-    if (!po) return;
-    UI.modal(`<h2>Te quedaste sin club</h2><div class="small">${U.esc(po.reason)}</div><div class="small muted">Elegí tu próximo desafío:</div>
-      <div class="list">${po.offers.map((id) => {
-        const t = G.teams[id];
-        return `<div class="li" data-a="takeJob" data-id="${id}">${UI.badge(t)}<div class="name">${U.esc(t.n)}<div class="sub">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].league)} · media ${DT.AI.rating(t)}</div></div><span class="btn sm primary">Aceptar</span></div>`;
-      }).join('')}</div>`);
-    // el modal de ofertas no se puede cerrar sin elegir
-    const close = document.querySelector('#modal .close');
-    if (close) close.remove();
+    const old = DT.userTeam();
+    if (careerView === 'clubs') {
+      showOverlay(`<div class="row between"><button class="btn sm" data-a="careerView" data-v="main">◀ Volver</button><span class="kicker">Clubes interesados</span></div>
+        <h2>Te quieren dirigir</h2><div class="small muted">Solo aparecen los clubes que preguntaron por vos. Al aceptar arrancás de inmediato con un nuevo objetivo.</div>
+        ${po.offers.map((id) => {
+          const t = G.teams[id];
+          return `<section class="card"><div class="row">${UI.badge(t, 'l')}<div class="grow"><b style="font-family:var(--display);font-size:1.15rem">${U.esc(t.n)}</b><div class="small muted">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.divName(t))}</div></div></div>
+            <div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Caja</span><b>${U.money(t.cash)}</b></div></div>
+            <button class="btn primary block" data-a="takeJob" data-id="${id}">Aceptar a ${U.esc(t.n)}</button></section>`;
+        }).join('') || '<div class="empty">Por ahora ningún club preguntó por vos.</div>'}`);
+      return;
+    }
+    if (careerView === 'retire') {
+      showOverlay(`<span class="kicker">Retiro</span><h2>¿Colgar el buzo?</h2>
+        <div class="small">Termina tu carrera como entrenador. Vas a ver el resumen de tu trayectoria y después podés empezar una partida nueva.</div>
+        <button class="btn danger block big" data-a="retireDo">Sí, me retiro</button><button class="btn block" data-a="careerView" data-v="main">Volver</button>`);
+      return;
+    }
+    showOverlay(`<div class="hero">${UI.badge(old, 'xl')}<span class="kicker" style="color:var(--loss)">Despedido</span><h1 style="font-size:2.2rem">Te quedaste sin club</h1><div class="muted">${U.esc(po.reason)}</div></div>
+      <section class="card"><span class="up">${U.esc(M.n)}</span>${careerStats()}</section>
+      <button class="btn primary block big" data-a="careerView" data-v="clubs">Ver clubes interesados (${po.offers.length})</button>
+      <button class="btn block big" data-a="careerView" data-v="retire">Retirarme</button>
+      <div class="small muted" style="text-align:center">Ya no podés dirigir partidos ni manejar el plantel de ${U.esc(old.n)}.</div>`);
+  };
+  A.careerView = (d) => { careerView = d.v; Main.showCareerScreen(); };
+  A.retireDo = () => {
+    DT.Board.retire();
+    careerView = 'main';
+    Main.autosave(true);
+    Main.showCareerScreen();
+  };
+  A.newCareer = () => {
+    document.getElementById('overlay').hidden = true;
+    Main.showStart(true);
   };
   A.takeJob = (d) => {
     DT.Board.takeJob(d.id);
+    careerView = 'main';
+    document.getElementById('overlay').hidden = true;
     UI.closeModal();
     UI.tab = 'home';
     UI.compSel = null;

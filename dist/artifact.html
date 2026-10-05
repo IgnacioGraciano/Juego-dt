@@ -116,14 +116,12 @@ h3 { font-size: 1.1rem; }
 .badge.l { width: 56px; height: 62px; font-size: 1.05rem; padding-bottom: 10px; }
 .badge.xl { width: 72px; height: 80px; font-size: 1.3rem; padding-bottom: 12px; }
 .badge-wrap { filter: drop-shadow(0 0 0.6px var(--muted)); display: inline-flex; }
-/* Escudos reales: si la imagen no carga se muestra el escudo dibujado */
-.crest-wrap { filter: none; width: 34px; height: 38px; flex: none; align-items: center; justify-content: center; }
-.crest-wrap.s { width: 22px; height: 25px; } .crest-wrap.l { width: 56px; height: 62px; } .crest-wrap.xl { width: 72px; height: 80px; }
-.crest-wrap .crest { width: 100%; height: 100%; object-fit: contain; display: block; }
-.crest-wrap > .badge { display: none; }
-.crest-wrap.nocrest { filter: drop-shadow(0 0 0.6px var(--muted)); }
-.crest-wrap.nocrest > .crest { display: none; }
-.crest-wrap.nocrest > .badge { display: inline-grid; }
+/* Escudos reales: se ve el escudo dibujado hasta que la imagen termina de cargar (sin conexión queda el dibujado) */
+.crest-wrap { position: relative; flex: none; align-items: center; justify-content: center; }
+.crest-wrap .crest { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; }
+.crest-wrap.crest-ok { filter: none; }
+.crest-wrap.crest-ok .crest { opacity: 1; }
+.crest-wrap.crest-ok > .badge { visibility: hidden; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); } }
 :root[data-theme="dark"] .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); }
 .diffpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -2684,9 +2682,44 @@ DT.Board = (function () {
     return cands.slice(0, fired ? 4 : 2).map((t) => t.id);
   };
 
+  // Clubes interesados en el DT: se renuevan cada 6 semanas y dependen de su reputación.
+  B.interested = function () {
+    const G = DT.G;
+    const M = G.manager;
+    const key = G.year * 100 + Math.floor(G.week / 6);
+    const valid = (id) => G.teams[id] && id !== G.user && DT.inLeague(G.teams[id]);
+    if (G.interest && G.interest.key === key && G.interest.ids.every(valid)) return G.interest.ids;
+    const pool = Object.values(G.teams).filter((t) => valid(t.id));
+    const cands = U.shuffle(pool.filter((t) => t.rep <= M.rep + 6 && t.rep >= M.rep - 14));
+    // con buena imagen ante la directiva actual hay más clubes atentos
+    const n = U.clamp(Math.round(M.rep / 25) + (M.conf >= 60 ? 1 : 0) + U.ri(-1, 1), 0, 5);
+    G.interest = { key, ids: cands.slice(0, n).map((t) => t.id) };
+    return G.interest.ids;
+  };
+
+  // Renunciar para dirigir a un club interesado.
+  B.leave = function (tid) {
+    const G = DT.G;
+    const me = DT.userTeam();
+    G.manager.career.push({ club: me.n, from: G.manager.clubs[G.manager.clubs.length - 1].from, to: G.year, why: `Renunció para ir a ${G.teams[tid].n}` });
+    DT.news(`${G.manager.n} deja ${me.n} y se va a ${G.teams[tid].n}.`, 'club');
+    for (const m of G.inbox) if (m.actions && !m.done && m.actions.some((a) => a.id === 'job')) m.done = true;
+    G.interest = null;
+    B.takeJob(tid);
+  };
+
+  // Retiro del DT: termina la carrera.
+  B.retire = function () {
+    const G = DT.G;
+    G.pendingOffers = null;
+    G.retired = { y: G.year, w: G.week };
+    DT.news(`${G.manager.n} anunció su retiro como entrenador.`, 'club');
+  };
+
   B.takeJob = function (tid) {
     const G = DT.G;
     G.pendingOffers = null;
+    G.interest = null;
     DT.W.setUserTeam(tid);
     const t = DT.userTeam();
     if (G.week === 0) {
@@ -4759,7 +4792,7 @@ DT.Save = (function () {
   Save.meta = function () {
     const G = DT.G;
     const t = DT.userTeam();
-    return { team: t.n, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now() };
+    return { team: t.n, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now(), retired: !!G.retired, fired: !!G.pendingOffers };
   };
   Save.localMeta = function () {
     try { return JSON.parse(localStorage.getItem(KEY + '_meta') || 'null'); } catch (e) { return null; }
@@ -4876,7 +4909,7 @@ DT.UI = (function () {
     const drawn = `<span class="badge ${size || ''}" style="--c1:${t.c1};--c2:${t.c2};--bt:${UI.textOn(t.c1)}">${U.esc(t.s)}</span>`;
     const url = UI.crestUrl(t);
     if (!url) return `<span class="badge-wrap">${drawn}</span>`;
-    return `<span class="badge-wrap crest-wrap ${size || ''}"><img class="crest" src="${url}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('nocrest')">${drawn}</span>`;
+    return `<span class="badge-wrap crest-wrap ${size || ''}">${drawn}<img class="crest" src="${url}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('crest-ok')"></span>`;
   };
   UI.teamName = (t, cls) => `<span class="${cls || ''}" data-a="team" data-id="${t.id}">${U.esc(t.n)}</span>`;
   UI.pos = (p) => `<span class="pos ${p.pos}">${U.posName[p.pos]}</span>`;
@@ -5003,6 +5036,8 @@ DT.UI = (function () {
 
   UI.render = function () {
     if (!DT.G) return;
+    // despedido o retirado: pantalla propia, sin acceso al club
+    if (DT.G.pendingOffers || DT.G.retired) { DT.Main.showCareerScreen(); return; }
     UI.renderTop();
     const main = $('#main');
     const scr = DT.Screens[UI.tab] || DT.Screens.home;
@@ -5105,6 +5140,7 @@ DT.Screens = (function () {
       <div class="row between"><span class="up">Directiva</span><span class="small ${conf < 30 ? '' : 'muted'}" style="${conf < 30 ? 'color:var(--loss);font-weight:700' : ''}">Confianza ${conf}/100</span></div>
       <div class="bar ${conf < 30 ? 'bad' : conf < 50 ? 'warn' : ''}"><i style="width:${conf}%"></i></div>
       <div class="small">${M.obj ? U.esc(M.obj.text) : ''}</div>
+      ${(() => { const n = DT.Board.interested().length; return n ? `<button class="linkbtn" style="align-self:flex-start;padding-left:0" data-a="goInterest">${n} ${n === 1 ? 'club interesado' : 'clubes interesados'} en vos ▸</button>` : ''; })()}
     </section>`);
     // Tabla resumida
     if (G.season.comps[DT.divOf(t)]) {
@@ -5139,6 +5175,13 @@ DT.Screens = (function () {
       ${pending ? `<div class="actions">${m.actions.map((a, i) => `<button class="btn sm ${i === 0 ? 'primary' : ''}" data-a="msgAct" data-id="${m.id}" data-i="${i}">${U.esc(a.label)}${a.sub ? `<span class="tiny" style="display:block;font-weight:500;opacity:.8">${U.esc(a.sub)}</span>` : ''}</button>`).join('')}</div>` : ''}
       ${m.result ? `<div class="tiny muted">${U.esc(m.result)}</div>` : ''}
     </div>`;
+  };
+  A.goInterest = () => {
+    UI.tab = 'club';
+    UI.sub.club = 'board';
+    UI.render();
+    const el = document.getElementById('interest');
+    if (el) el.scrollIntoView({ block: 'start' });
   };
   A.msgAct = (d) => {
     const res = DT.Act.resolve(+d.id, +d.i);
@@ -6001,11 +6044,47 @@ DT.Screens = (function () {
     return `<section class="card"><span class="up">Objetivo ${G.year}</span><div>${U.esc(M.obj ? M.obj.text : '')}</div>
         <div class="row between small"><span>Confianza de la directiva</span><b>${conf}/100</b></div><div class="bar ${conf < 30 ? 'bad' : conf < 50 ? 'warn' : ''}"><i style="width:${conf}%"></i></div>
         <div class="small muted">Sube con victorias (sobre todo contra rivales más fuertes) y al cumplir el objetivo. Baja con derrotas, deudas o una masa salarial por encima del tope. Por debajo de 12 te despiden.</div></section>
+      ${Sc.interestCard()}
       <section class="card"><span class="up">Entrenador</span><h2>${U.esc(M.n)}</h2>
         <div class="kv"><div><span>Reputación</span><b>${Math.round(M.rep)}</b></div><div><span>Partidos</span><b>${M.pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${M.g}-${M.e}-${M.p}</b></div></div>
         <div class="small">Club actual: <b>${U.esc(t.n)}</b> desde ${M.clubs[M.clubs.length - 1].from}.</div></section>
       <section class="card"><h3>Títulos</h3>${M.titles.length ? `<div class="list">${M.titles.slice().reverse().map((x) => `<div class="li"><span class="pill gold">${x.y}</span><div class="name">${U.esc(x.c)}<div class="sub">${U.esc(x.t)}</div></div></div>`).join('')}</div>` : '<div class="small muted">Todavía sin títulos. ¡A trabajar!</div>'}</section>
       <section class="card"><h3>Trayectoria</h3>${M.career.length ? `<div class="list">${M.career.slice().reverse().map((c) => `<div class="li"><div class="name">${U.esc(c.club)}<div class="sub">${c.y ? `${c.y}: terminó ${c.pos}º · confianza ${c.conf}` : `${c.from}–${c.to} · ${U.esc(c.why)}`}</div></div></div>`).join('')}</div>` : '<div class="small muted">Primera temporada en curso.</div>'}</section>`;
+  };
+
+  // Clubes que quieren al DT: se puede renunciar para ir a uno de ellos.
+  Sc.interestCard = function () {
+    const G = DT.G;
+    const ids = DT.Board.interested();
+    const rows = ids.map((id) => {
+      const t = G.teams[id];
+      return `<div class="li" data-a="leaveAsk" data-id="${id}">${UI.badge(t)}<div class="name">${U.esc(t.n)}<div class="sub">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.divName(t))} · media ${DT.AI.rating(t)} · rep. ${Math.round(t.rep)}</div></div><span class="btn sm">Ver</span></div>`;
+    }).join('');
+    return `<section class="card" id="interest"><div class="row between"><h3>Clubes interesados en vos</h3><span class="pill">${ids.length}</span></div>
+      ${rows ? `<div class="list">${rows}</div>` : '<div class="small muted">Por ahora ningún club preguntó por vos. Con buenos resultados y más reputación van a aparecer interesados.</div>'}
+      <div class="tiny muted">La lista se renueva cada 6 semanas. Si aceptás, dejás ${U.esc(DT.userTeam().n)} en el momento.</div></section>`;
+  };
+  A.leaveAsk = (d) => {
+    const G = DT.G;
+    const t = G.teams[d.id];
+    const me = DT.userTeam();
+    if (!t) return;
+    UI.modal(`<span class="kicker">Cambio de club</span>
+      <div class="row">${UI.badge(t, 'l')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.divName(t))}</div></div></div>
+      <div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Caja</span><b>${U.money(t.cash)}</b></div></div>
+      <div class="small">Si aceptás, renunciás a ${U.esc(me.n)} y dirigís a ${U.esc(t.n)} desde ahora, con un nuevo objetivo de la directiva.</div>
+      <button class="btn primary block" data-a="leaveDo" data-id="${t.id}">Irme a ${U.esc(t.n)}</button>
+      <button class="btn block" data-a="team" data-id="${t.id}">Ver plantel</button>`);
+  };
+  A.leaveDo = (d) => {
+    if (!DT.G.teams[d.id]) return;
+    DT.Board.leave(d.id);
+    UI.closeModal();
+    UI.tab = 'home';
+    UI.compSel = null;
+    DT.Main.autosave(true);
+    UI.render();
+    UI.toast(`Nuevo desafío: ${DT.userTeam().n}.`);
   };
 
   Sc.history = function () {
@@ -7174,7 +7253,6 @@ DT.Main = (function () {
     UI.compCountry = null;
     UI.closeModal();
     document.getElementById('overlay').hidden = true;
-    if (DT.G.pendingOffers) Main.showJobs();
     UI.render();
   };
 
@@ -7200,7 +7278,7 @@ DT.Main = (function () {
           <div class="muted">Dirigí a tu club en las 10 ligas de Sudamérica, la Libertadores y la Sudamericana.</div>
           ${UI.layoutSwitch()}
         </div>
-        ${meta ? `<section class="card"><span class="up">Partida guardada</span><div><b>${U.esc(meta.team)}</b> · ${U.esc(meta.mgr)} · temporada ${meta.year}, semana ${meta.week}</div><button class="btn primary block big" data-a="loadLocal">Continuar partida</button></section>` : ''}
+        ${meta ? `<section class="card"><span class="up">Partida guardada</span><div><b>${U.esc(meta.team)}</b> · ${U.esc(meta.mgr)} · temporada ${meta.year}, semana ${meta.week}${meta.retired ? ' · <span class="pill">Retirado</span>' : meta.fired ? ' · <span class="pill bad">Sin club</span>' : ''}</div><button class="btn primary block big" data-a="loadLocal">${meta.retired ? 'Ver resumen de la carrera' : 'Continuar partida'}</button></section>` : ''}
         ${cloudMeta && (!meta || cloudMeta.at > meta.at) ? `<section class="card"><span class="up">En tu cuenta</span><div><b>${U.esc(cloudMeta.team)}</b> · temporada ${cloudMeta.year}, semana ${cloudMeta.week}</div><button class="btn block" data-a="loadCloud">Cargar desde la nube</button></section>` : ''}
         <section class="card">
           <h2>Nueva partida</h2>
@@ -7295,7 +7373,7 @@ DT.Main = (function () {
       Main.showSeasonSummary(G.history[0]);
       UI.render();
     } else if (ev.type === 'jobs') {
-      Main.showJobs();
+      Main.autosave(true);
       UI.render();
     } else {
       if (ev.type === 'inbox') {
@@ -7328,21 +7406,79 @@ DT.Main = (function () {
       <button class="btn primary block" data-a="closeModal">Seguir</button>`);
   };
 
-  Main.showJobs = function () {
+  // ---------- despido y retiro ----------
+  // Pantalla completa: mientras estás sin club no se puede tocar nada del equipo anterior.
+  let careerView = 'main';
+  const careerStats = () => {
+    const M = DT.G.manager;
+    return `<div class="kv"><div><span>Partidos</span><b>${M.pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${M.g}-${M.e}-${M.p}</b></div><div><span>Títulos</span><b>${M.titles.length}</b></div><div><span>Reputación</span><b>${Math.round(M.rep)}</b></div><div><span>Clubes</span><b>${M.clubs.length}</b></div><div><span>Desde</span><b>${M.since}</b></div></div>`;
+  };
+  const careerList = () => {
+    const M = DT.G.manager;
+    const rows = M.career.filter((c) => !c.y).slice().reverse();
+    return rows.length ? `<div class="list">${rows.map((c) => `<div class="li"><div class="name">${U.esc(c.club)}<div class="sub">${c.from}–${c.to} · ${U.esc(c.why)}</div></div></div>`).join('')}</div>` : '';
+  };
+  function showOverlay(html) {
+    const el = document.getElementById('overlay');
+    el.innerHTML = `<div class="wrap career">${html}</div>`;
+    el.hidden = false;
+    el.scrollTop = 0;
+    document.getElementById('tabs').hidden = true;
+    document.getElementById('cta').innerHTML = '';
+  }
+  Main.showCareerScreen = function () {
     const G = DT.G;
+    const M = G.manager;
+    UI.closeModal();
+    if (G.retired) {
+      showOverlay(`<div class="hero"><svg class="trophy" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true"><path d="M20 8h24v14a12 12 0 0 1-24 0z"/><path d="M20 12h-8a8 8 0 0 0 10 12M44 12h8a8 8 0 0 1-10 12"/><path d="M32 34v10M24 56h16M26 44h12v12H26z"/></svg>
+        <span class="kicker">Fin de la carrera · ${G.retired.y}</span><h1>${U.esc(M.n)}</h1><div class="muted">Colgó el buzo de entrenador después de ${G.retired.y - M.since + 1} ${G.retired.y - M.since ? 'temporadas' : 'temporada'}.</div></div>
+        <section class="card">${careerStats()}</section>
+        <section class="card"><h3>Títulos</h3>${M.titles.length ? `<div class="list">${M.titles.map((x) => `<div class="li"><span class="pill gold">${x.y}</span><div class="name">${U.esc(x.c)}<div class="sub">${U.esc(x.t)}</div></div></div>`).join('')}</div>` : '<div class="small muted">Sin títulos.</div>'}</section>
+        ${careerList() ? `<section class="card"><h3>Trayectoria</h3>${careerList()}</section>` : ''}
+        <button class="btn primary block big" data-a="newCareer">Empezar una nueva partida</button>`);
+      return;
+    }
     const po = G.pendingOffers;
-    if (!po) return;
-    UI.modal(`<h2>Te quedaste sin club</h2><div class="small">${U.esc(po.reason)}</div><div class="small muted">Elegí tu próximo desafío:</div>
-      <div class="list">${po.offers.map((id) => {
-        const t = G.teams[id];
-        return `<div class="li" data-a="takeJob" data-id="${id}">${UI.badge(t)}<div class="name">${U.esc(t.n)}<div class="sub">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.COUNTRIES[t.cc].league)} · media ${DT.AI.rating(t)}</div></div><span class="btn sm primary">Aceptar</span></div>`;
-      }).join('')}</div>`);
-    // el modal de ofertas no se puede cerrar sin elegir
-    const close = document.querySelector('#modal .close');
-    if (close) close.remove();
+    const old = DT.userTeam();
+    if (careerView === 'clubs') {
+      showOverlay(`<div class="row between"><button class="btn sm" data-a="careerView" data-v="main">◀ Volver</button><span class="kicker">Clubes interesados</span></div>
+        <h2>Te quieren dirigir</h2><div class="small muted">Solo aparecen los clubes que preguntaron por vos. Al aceptar arrancás de inmediato con un nuevo objetivo.</div>
+        ${po.offers.map((id) => {
+          const t = G.teams[id];
+          return `<section class="card"><div class="row">${UI.badge(t, 'l')}<div class="grow"><b style="font-family:var(--display);font-size:1.15rem">${U.esc(t.n)}</b><div class="small muted">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.divName(t))}</div></div></div>
+            <div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Caja</span><b>${U.money(t.cash)}</b></div></div>
+            <button class="btn primary block" data-a="takeJob" data-id="${id}">Aceptar a ${U.esc(t.n)}</button></section>`;
+        }).join('') || '<div class="empty">Por ahora ningún club preguntó por vos.</div>'}`);
+      return;
+    }
+    if (careerView === 'retire') {
+      showOverlay(`<span class="kicker">Retiro</span><h2>¿Colgar el buzo?</h2>
+        <div class="small">Termina tu carrera como entrenador. Vas a ver el resumen de tu trayectoria y después podés empezar una partida nueva.</div>
+        <button class="btn danger block big" data-a="retireDo">Sí, me retiro</button><button class="btn block" data-a="careerView" data-v="main">Volver</button>`);
+      return;
+    }
+    showOverlay(`<div class="hero">${UI.badge(old, 'xl')}<span class="kicker" style="color:var(--loss)">Despedido</span><h1 style="font-size:2.2rem">Te quedaste sin club</h1><div class="muted">${U.esc(po.reason)}</div></div>
+      <section class="card"><span class="up">${U.esc(M.n)}</span>${careerStats()}</section>
+      <button class="btn primary block big" data-a="careerView" data-v="clubs">Ver clubes interesados (${po.offers.length})</button>
+      <button class="btn block big" data-a="careerView" data-v="retire">Retirarme</button>
+      <div class="small muted" style="text-align:center">Ya no podés dirigir partidos ni manejar el plantel de ${U.esc(old.n)}.</div>`);
+  };
+  A.careerView = (d) => { careerView = d.v; Main.showCareerScreen(); };
+  A.retireDo = () => {
+    DT.Board.retire();
+    careerView = 'main';
+    Main.autosave(true);
+    Main.showCareerScreen();
+  };
+  A.newCareer = () => {
+    document.getElementById('overlay').hidden = true;
+    Main.showStart(true);
   };
   A.takeJob = (d) => {
     DT.Board.takeJob(d.id);
+    careerView = 'main';
+    document.getElementById('overlay').hidden = true;
     UI.closeModal();
     UI.tab = 'home';
     UI.compSel = null;

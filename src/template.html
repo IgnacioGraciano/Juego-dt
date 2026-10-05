@@ -116,14 +116,12 @@ h3 { font-size: 1.1rem; }
 .badge.l { width: 56px; height: 62px; font-size: 1.05rem; padding-bottom: 10px; }
 .badge.xl { width: 72px; height: 80px; font-size: 1.3rem; padding-bottom: 12px; }
 .badge-wrap { filter: drop-shadow(0 0 0.6px var(--muted)); display: inline-flex; }
-/* Escudos reales: si la imagen no carga se muestra el escudo dibujado */
-.crest-wrap { filter: none; width: 34px; height: 38px; flex: none; align-items: center; justify-content: center; }
-.crest-wrap.s { width: 22px; height: 25px; } .crest-wrap.l { width: 56px; height: 62px; } .crest-wrap.xl { width: 72px; height: 80px; }
-.crest-wrap .crest { width: 100%; height: 100%; object-fit: contain; display: block; }
-.crest-wrap > .badge { display: none; }
-.crest-wrap.nocrest { filter: drop-shadow(0 0 0.6px var(--muted)); }
-.crest-wrap.nocrest > .crest { display: none; }
-.crest-wrap.nocrest > .badge { display: inline-grid; }
+/* Escudos reales: se ve el escudo dibujado hasta que la imagen termina de cargar (sin conexión queda el dibujado) */
+.crest-wrap { position: relative; flex: none; align-items: center; justify-content: center; }
+.crest-wrap .crest { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; }
+.crest-wrap.crest-ok { filter: none; }
+.crest-wrap.crest-ok .crest { opacity: 1; }
+.crest-wrap.crest-ok > .badge { visibility: hidden; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); } }
 :root[data-theme="dark"] .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); }
 .diffpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

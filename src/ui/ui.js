@@ -39,7 +39,7 @@ DT.UI = (function () {
     const drawn = `<span class="badge ${size || ''}" style="--c1:${t.c1};--c2:${t.c2};--bt:${UI.textOn(t.c1)}">${U.esc(t.s)}</span>`;
     const url = UI.crestUrl(t);
     if (!url) return `<span class="badge-wrap">${drawn}</span>`;
-    return `<span class="badge-wrap crest-wrap ${size || ''}"><img class="crest" src="${url}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('nocrest')">${drawn}</span>`;
+    return `<span class="badge-wrap crest-wrap ${size || ''}">${drawn}<img class="crest" src="${url}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('crest-ok')"></span>`;
   };
   UI.teamName = (t, cls) => `<span class="${cls || ''}" data-a="team" data-id="${t.id}">${U.esc(t.n)}</span>`;
   UI.pos = (p) => `<span class="pos ${p.pos}">${U.posName[p.pos]}</span>`;
@@ -166,6 +166,8 @@ DT.UI = (function () {
 
   UI.render = function () {
     if (!DT.G) return;
+    // despedido o retirado: pantalla propia, sin acceso al club
+    if (DT.G.pendingOffers || DT.G.retired) { DT.Main.showCareerScreen(); return; }
     UI.renderTop();
     const main = $('#main');
     const scr = DT.Screens[UI.tab] || DT.Screens.home;

@@ -465,11 +465,47 @@
     return `<section class="card"><span class="up">Objetivo ${G.year}</span><div>${U.esc(M.obj ? M.obj.text : '')}</div>
         <div class="row between small"><span>Confianza de la directiva</span><b>${conf}/100</b></div><div class="bar ${conf < 30 ? 'bad' : conf < 50 ? 'warn' : ''}"><i style="width:${conf}%"></i></div>
         <div class="small muted">Sube con victorias (sobre todo contra rivales más fuertes) y al cumplir el objetivo. Baja con derrotas, deudas o una masa salarial por encima del tope. Por debajo de 12 te despiden.</div></section>
+      ${Sc.interestCard()}
       <section class="card"><span class="up">Entrenador</span><h2>${U.esc(M.n)}</h2>
         <div class="kv"><div><span>Reputación</span><b>${Math.round(M.rep)}</b></div><div><span>Partidos</span><b>${M.pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${M.g}-${M.e}-${M.p}</b></div></div>
         <div class="small">Club actual: <b>${U.esc(t.n)}</b> desde ${M.clubs[M.clubs.length - 1].from}.</div></section>
       <section class="card"><h3>Títulos</h3>${M.titles.length ? `<div class="list">${M.titles.slice().reverse().map((x) => `<div class="li"><span class="pill gold">${x.y}</span><div class="name">${U.esc(x.c)}<div class="sub">${U.esc(x.t)}</div></div></div>`).join('')}</div>` : '<div class="small muted">Todavía sin títulos. ¡A trabajar!</div>'}</section>
       <section class="card"><h3>Trayectoria</h3>${M.career.length ? `<div class="list">${M.career.slice().reverse().map((c) => `<div class="li"><div class="name">${U.esc(c.club)}<div class="sub">${c.y ? `${c.y}: terminó ${c.pos}º · confianza ${c.conf}` : `${c.from}–${c.to} · ${U.esc(c.why)}`}</div></div></div>`).join('')}</div>` : '<div class="small muted">Primera temporada en curso.</div>'}</section>`;
+  };
+
+  // Clubes que quieren al DT: se puede renunciar para ir a uno de ellos.
+  Sc.interestCard = function () {
+    const G = DT.G;
+    const ids = DT.Board.interested();
+    const rows = ids.map((id) => {
+      const t = G.teams[id];
+      return `<div class="li" data-a="leaveAsk" data-id="${id}">${UI.badge(t)}<div class="name">${U.esc(t.n)}<div class="sub">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.divName(t))} · media ${DT.AI.rating(t)} · rep. ${Math.round(t.rep)}</div></div><span class="btn sm">Ver</span></div>`;
+    }).join('');
+    return `<section class="card" id="interest"><div class="row between"><h3>Clubes interesados en vos</h3><span class="pill">${ids.length}</span></div>
+      ${rows ? `<div class="list">${rows}</div>` : '<div class="small muted">Por ahora ningún club preguntó por vos. Con buenos resultados y más reputación van a aparecer interesados.</div>'}
+      <div class="tiny muted">La lista se renueva cada 6 semanas. Si aceptás, dejás ${U.esc(DT.userTeam().n)} en el momento.</div></section>`;
+  };
+  A.leaveAsk = (d) => {
+    const G = DT.G;
+    const t = G.teams[d.id];
+    const me = DT.userTeam();
+    if (!t) return;
+    UI.modal(`<span class="kicker">Cambio de club</span>
+      <div class="row">${UI.badge(t, 'l')}<div class="grow"><h2>${U.esc(t.n)}</h2><div class="small muted">${DT.COUNTRIES[t.cc].flag} ${U.esc(DT.divName(t))}</div></div></div>
+      <div class="kv"><div><span>Media</span><b>${DT.AI.rating(t)}</b></div><div><span>Reputación</span><b>${Math.round(t.rep)}</b></div><div><span>Caja</span><b>${U.money(t.cash)}</b></div></div>
+      <div class="small">Si aceptás, renunciás a ${U.esc(me.n)} y dirigís a ${U.esc(t.n)} desde ahora, con un nuevo objetivo de la directiva.</div>
+      <button class="btn primary block" data-a="leaveDo" data-id="${t.id}">Irme a ${U.esc(t.n)}</button>
+      <button class="btn block" data-a="team" data-id="${t.id}">Ver plantel</button>`);
+  };
+  A.leaveDo = (d) => {
+    if (!DT.G.teams[d.id]) return;
+    DT.Board.leave(d.id);
+    UI.closeModal();
+    UI.tab = 'home';
+    UI.compSel = null;
+    DT.Main.autosave(true);
+    UI.render();
+    UI.toast(`Nuevo desafío: ${DT.userTeam().n}.`);
   };
 
   Sc.history = function () {
