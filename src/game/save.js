@@ -114,7 +114,7 @@ DT.Save = (function () {
   Save.meta = function () {
     const G = DT.G;
     const t = DT.userTeam();
-    return { team: t.n, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now() };
+    return { team: t.n, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now(), retired: !!G.retired, fired: !!G.pendingOffers };
   };
   Save.localMeta = function () {
     try { return JSON.parse(localStorage.getItem(KEY + '_meta') || 'null'); } catch (e) { return null; }

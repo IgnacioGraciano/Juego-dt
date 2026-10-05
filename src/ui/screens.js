@@ -22,6 +22,7 @@ DT.Screens = (function () {
       <div class="row between"><span class="up">Directiva</span><span class="small ${conf < 30 ? '' : 'muted'}" style="${conf < 30 ? 'color:var(--loss);font-weight:700' : ''}">Confianza ${conf}/100</span></div>
       <div class="bar ${conf < 30 ? 'bad' : conf < 50 ? 'warn' : ''}"><i style="width:${conf}%"></i></div>
       <div class="small">${M.obj ? U.esc(M.obj.text) : ''}</div>
+      ${(() => { const n = DT.Board.interested().length; return n ? `<button class="linkbtn" style="align-self:flex-start;padding-left:0" data-a="goInterest">${n} ${n === 1 ? 'club interesado' : 'clubes interesados'} en vos ▸</button>` : ''; })()}
     </section>`);
     // Tabla resumida
     if (G.season.comps[DT.divOf(t)]) {
@@ -56,6 +57,13 @@ DT.Screens = (function () {
       ${pending ? `<div class="actions">${m.actions.map((a, i) => `<button class="btn sm ${i === 0 ? 'primary' : ''}" data-a="msgAct" data-id="${m.id}" data-i="${i}">${U.esc(a.label)}${a.sub ? `<span class="tiny" style="display:block;font-weight:500;opacity:.8">${U.esc(a.sub)}</span>` : ''}</button>`).join('')}</div>` : ''}
       ${m.result ? `<div class="tiny muted">${U.esc(m.result)}</div>` : ''}
     </div>`;
+  };
+  A.goInterest = () => {
+    UI.tab = 'club';
+    UI.sub.club = 'board';
+    UI.render();
+    const el = document.getElementById('interest');
+    if (el) el.scrollIntoView({ block: 'start' });
   };
   A.msgAct = (d) => {
     const res = DT.Act.resolve(+d.id, +d.i);

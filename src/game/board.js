@@ -148,9 +148,44 @@ DT.Board = (function () {
     return cands.slice(0, fired ? 4 : 2).map((t) => t.id);
   };
 
+  // Clubes interesados en el DT: se renuevan cada 6 semanas y dependen de su reputación.
+  B.interested = function () {
+    const G = DT.G;
+    const M = G.manager;
+    const key = G.year * 100 + Math.floor(G.week / 6);
+    const valid = (id) => G.teams[id] && id !== G.user && DT.inLeague(G.teams[id]);
+    if (G.interest && G.interest.key === key && G.interest.ids.every(valid)) return G.interest.ids;
+    const pool = Object.values(G.teams).filter((t) => valid(t.id));
+    const cands = U.shuffle(pool.filter((t) => t.rep <= M.rep + 6 && t.rep >= M.rep - 14));
+    // con buena imagen ante la directiva actual hay más clubes atentos
+    const n = U.clamp(Math.round(M.rep / 25) + (M.conf >= 60 ? 1 : 0) + U.ri(-1, 1), 0, 5);
+    G.interest = { key, ids: cands.slice(0, n).map((t) => t.id) };
+    return G.interest.ids;
+  };
+
+  // Renunciar para dirigir a un club interesado.
+  B.leave = function (tid) {
+    const G = DT.G;
+    const me = DT.userTeam();
+    G.manager.career.push({ club: me.n, from: G.manager.clubs[G.manager.clubs.length - 1].from, to: G.year, why: `Renunció para ir a ${G.teams[tid].n}` });
+    DT.news(`${G.manager.n} deja ${me.n} y se va a ${G.teams[tid].n}.`, 'club');
+    for (const m of G.inbox) if (m.actions && !m.done && m.actions.some((a) => a.id === 'job')) m.done = true;
+    G.interest = null;
+    B.takeJob(tid);
+  };
+
+  // Retiro del DT: termina la carrera.
+  B.retire = function () {
+    const G = DT.G;
+    G.pendingOffers = null;
+    G.retired = { y: G.year, w: G.week };
+    DT.news(`${G.manager.n} anunció su retiro como entrenador.`, 'club');
+  };
+
   B.takeJob = function (tid) {
     const G = DT.G;
     G.pendingOffers = null;
+    G.interest = null;
     DT.W.setUserTeam(tid);
     const t = DT.userTeam();
     if (G.week === 0) {
