@@ -63,6 +63,7 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 - Directiva con objetivos y confianza. En **Club → Directiva** ves los clubes interesados en vos (se renuevan cada 6 semanas según tu reputación) y podés renunciar para irte a uno de ellos.
 - Si te despiden, aparece una pantalla de despido: ya no podés manejar el club anterior y elegís entre ver los clubes interesados o retirarte. Al retirarte ves el resumen de tu carrera.
 - Historial de campeones, vitrina del club y trayectoria del DT.
+- Resumen semanal a pantalla completa al pasar de semana: novedades del plantel (lesiones, suspendidos, cansados, juveniles que crecen), del mercado y de tu liga. Se puede desactivar.
 - Récords del club (goleadores, más partidos, mayores goleadas, rachas, historial contra cada rival) y 25 logros para desbloquear.
 
 ## Datos

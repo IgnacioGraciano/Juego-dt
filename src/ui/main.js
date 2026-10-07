@@ -39,6 +39,7 @@ DT.Main = (function () {
     if (ut.capBase === undefined) DT.E.resetCap(ut);
     if (DT.G.settings.speed === 8) DT.G.settings.speed = 4;
     if (!DT.G.retired) DT.Acad.ensure(ut);
+    if (!DT.G.wkSnap && !DT.G.retired && !DT.G.pendingOffers) DT.Week.snap();
     UI.tab = 'home';
     UI.compSel = null;
     UI.compCountry = null;
@@ -144,6 +145,7 @@ DT.Main = (function () {
     const name = (start.name || '').trim() || 'El Profe';
     DT.Save.setSlot(start.slot || 1);
     DT.W.newGame(start.cc + '_' + d.code, name, start.diff);
+    DT.Week.snap();
     UI.tab = 'home';
     Main.autosave(true);
     UI.render();
@@ -193,7 +195,10 @@ DT.Main = (function () {
       UI.busy = false;
     }
     if (ev.type === 'match') {
+      // el resumen de la semana se muestra después del partido
+      UI.skipWeek = true;
       UI.render();
+      UI.skipWeek = false;
       DT.MatchUI.open(ev.match);
     } else if (ev.type === 'seasonEnd') {
       Main.autosave(true);

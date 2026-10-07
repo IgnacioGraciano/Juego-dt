@@ -10,7 +10,7 @@ DT.Save = (function () {
     const out = Object.assign({}, G);
     out.players = Object.values(G.players).map((p) => {
       const arr = PF.map((k) => (typeof p[k] === 'number' ? Math.round(p[k] * 100) / 100 : p[k]));
-      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0, (p.num || p.loan || p.sellOn || p.nt || p.acad || p.cl !== undefined || p.fromAcad) ? { num: p.num, loan: p.loan, sellOn: p.sellOn, nt: p.nt, acad: p.acad, cl: p.cl, fa: p.fromAcad } : 0);
+      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0, (p.num || p.loan || p.sellOn || p.nt || p.acad || p.cl !== undefined || p.fromAcad) ? { num: p.num, loan: p.loan, sellOn: p.sellOn, nt: p.nt || undefined, acad: p.acad || undefined, cl: p.cl, fa: p.fromAcad || undefined } : 0);
       return arr;
     });
     const S = G.season;

@@ -116,7 +116,12 @@ DT.UI = (function () {
   // Avisos que aparecen solos en pantalla (por ejemplo, juveniles que suben al plantel).
   UI.showNotices = function () {
     const G = DT.G;
-    if (!G || !G.notices || !G.notices.length || !$('#modal').hidden) return;
+    if (!G || !$('#modal').hidden) return;
+    if (!G.notices || !G.notices.length) {
+      // sin avisos pendientes: si pasó la semana, el resumen semanal
+      if (DT.Week && !UI.skipWeek && $('#overlay').hidden && DT.Week.due()) DT.Week.show();
+      return;
+    }
     const n = G.notices.shift();
     if (n.kind === 'offer') {
       const o = DT.M.getOffer(n.oid);

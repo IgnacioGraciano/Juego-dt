@@ -72,7 +72,8 @@ DT.divName = (t) => (t.lg ? DT.COUNTRIES[t.cc].league : t.d2 ? DT.COUNTRIES[t.cc
 // Noticias e inbox.
 DT.news = function (text, kind) {
   const G = DT.G;
-  G.news.unshift({ y: G.year, w: G.week, t: text, k: kind || 'info' });
+  G.newsN = (G.newsN || 0) + 1;
+  G.news.unshift({ y: G.year, w: G.week, t: text, k: kind || 'info', n: G.newsN });
   if (G.news.length > 80) G.news.length = 80;
 };
 

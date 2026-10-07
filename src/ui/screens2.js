@@ -690,6 +690,7 @@
       <section class="card"><h3>Partidos</h3>
         <span class="up">Velocidad del partido en vivo</span>
         <div class="seg">${[[1, 'x1'], [2, 'x2'], [4, 'x4']].map(([v, l]) => `<button class="${G.settings.speed === v ? 'on' : ''}" data-a="setSpeed" data-v="${v}">${l}</button>`).join('')}</div>
+        <label class="toggle small"><input type="checkbox" data-c="setWeekly" ${G.settings.weekly === false ? '' : 'checked'}> Mostrar el resumen semanal al pasar de semana</label>
         <span class="up">Cámara del partido</span>
         <div class="seg">${[['tv', 'Cámara TV (sigue la jugada)'], ['full', 'Cancha entera']].map(([v, l]) => `<button class="${(G.settings.cam || 'tv') === v ? 'on' : ''}" data-a="setCam" data-v="${v}">${l}</button>`).join('')}</div>
       </section>
@@ -698,6 +699,7 @@
   };
   A.setSpeed = (d) => { DT.G.settings.speed = +d.v; UI.render(); };
   A.setCam = (d) => { DT.G.settings.cam = d.v; UI.render(); };
+  A.setWeekly = (d, el) => { DT.G.settings.weekly = el.checked; if (el.checked) DT.Week.snap(); };
   A.saveNow = async () => {
     const ok = await DT.Main.autosave(true);
     UI.toast(ok ? 'Partida guardada.' : 'No se pudo guardar en este dispositivo. Exportá la partida para no perderla.');

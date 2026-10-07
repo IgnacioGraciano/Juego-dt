@@ -30,6 +30,7 @@ module.exports = {
     'src/ui/screens2.js',
     'src/ui/pitch.js',
     'src/ui/match_ui.js',
+    'src/ui/week.js',
     'src/ui/main.js',
   ],
 };
