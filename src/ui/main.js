@@ -40,6 +40,18 @@ DT.Main = (function () {
     if (DT.G.settings.speed === 8) DT.G.settings.speed = 4;
     if (!DT.G.retired) DT.Acad.ensure(ut);
     if (!DT.G.wkSnap && !DT.G.retired && !DT.G.pendingOffers) DT.Week.snap();
+    // la directiva se volvió más justa: las partidas ya empezadas se reevalúan una vez
+    if (!DT.G.boardV2 && !DT.G.retired && !DT.G.pendingOffers) {
+      DT.G.boardV2 = 1;
+      const M = DT.G.manager;
+      const st = DT.Board.standing();
+      const before = Math.round(M.conf);
+      if (st && st.pj >= 3 && st.pos <= st.target) M.conf = Math.max(M.conf, 50);
+      else if (M.conf < 35) M.conf = Math.min(35, M.conf + 10);
+      if (Math.round(M.conf) > before) {
+        DT.G.notices = (DT.G.notices || []).concat([{ kind: 'msg', title: 'La directiva revisó tu evaluación', body: `Con los nuevos criterios (posición frente al objetivo, avance en las copas y finanzas), tu confianza pasa de ${before} a ${Math.round(M.conf)}.` }]);
+      }
+    }
     UI.tab = 'home';
     UI.compSel = null;
     UI.compCountry = null;

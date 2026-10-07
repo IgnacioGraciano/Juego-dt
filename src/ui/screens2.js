@@ -566,7 +566,7 @@
     const conf = Math.round(M.conf);
     return `<section class="card"><span class="up">Objetivo ${G.year}</span><div>${U.esc(M.obj ? M.obj.text : '')}</div>
         <div class="row between small"><span>Confianza de la directiva</span><b>${conf}/100</b></div><div class="bar ${conf < 30 ? 'bad' : conf < 50 ? 'warn' : ''}"><i style="width:${conf}%"></i></div>
-        <div class="small muted">Sube con victorias (sobre todo contra rivales más fuertes) y al cumplir el objetivo. Baja con derrotas, deudas o una masa salarial por encima del tope. Por debajo de 12 te despiden.</div></section>
+        <div class="small muted">Sube con victorias (sobre todo contra rivales más fuertes), al estar en la tabla por encima del objetivo, al avanzar en las copas y con las finanzas sanas. Baja con derrotas, al estar por debajo del objetivo, con deudas o con sueldos por encima del tope. Por debajo de 25 llega un ultimátum y por debajo de 12 te despiden, salvo que estés a 2 puestos o menos del objetivo.</div></section>
       ${Sc.interestCard()}
       <section class="card"><span class="up">Entrenador</span><h2>${U.esc(M.n)}</h2>
         <div class="kv"><div><span>Reputación</span><b>${Math.round(M.rep)}</b></div><div><span>Partidos</span><b>${M.pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${M.g}-${M.e}-${M.p}</b></div></div>
