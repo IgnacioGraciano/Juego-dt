@@ -318,6 +318,20 @@ DT.S = (function () {
       if (aggA !== aggB) tie.winner = aggA > aggB ? tie.a : tie.b;
       else tie.winner = match.pen[0] > match.pen[1] ? match.h : match.a;
     }
+    // el usuario pasó de ronda en una copa: la directiva lo valora
+    if (tie.winner && DT.isUser(tie.winner) && tie.stage !== 'F') {
+      const comp = G.season.comps[tie.c];
+      if (comp && comp.type === 'cup') {
+        const left = comp.rounds - (+String(tie.stage).slice(1)) + 1;
+        const k = +String(tie.stage).slice(1);
+        const next = k + 1 >= comp.rounds ? 'la final' : S.cupStageName(comp, 'R' + (k + 1)).toLowerCase();
+        DT.Board.cupProgress(left <= 2 ? 5 : left <= 3 ? 4 : left <= 4 ? 3 : 2, `${comp.name}: ${next}`);
+      } else if (comp && comp.type === 'cont') {
+        const b = { PO: 2, R16: 3, QF: 4, SF: 5 }[tie.stage] || 2;
+        const next = { PO: 'octavos de final', R16: 'cuartos de final', QF: 'semifinal', SF: 'la final' }[tie.stage] || 'la siguiente ronda';
+        DT.Board.cupProgress(b, `${comp.name}: ${next}`);
+      }
+    }
   };
 
   // Simula los partidos pendientes de la franja actual (excepto si se pide).
@@ -430,6 +444,8 @@ DT.S = (function () {
       const st = S.groupStandings(comp, gi);
       first.push({ t: st[0], g: gi }); second.push({ t: st[1], g: gi }); third.push({ t: st[2], g: gi });
     });
+    // clasificar a la siguiente fase suma confianza
+    if (first.concat(second).some((x) => DT.isUser(x.t))) DT.Board.cupProgress(3, `${comp.name}: clasificación a la fase final`);
     if (comp.id === 'LIB') {
       comp.thirds = third.map((x) => x.t);
       S.pairR16(comp, first, second);
@@ -527,6 +543,7 @@ DT.S = (function () {
       G.manager.titles.push({ y: G.year, c: compName, t: t.n });
       G.manager.rep = Math.min(100, G.manager.rep + (compName.includes('Libertadores') ? 8 : compName.includes('Intercontinental') ? 6 : compName.includes('Sudamericana') ? 5 : 3));
       DT.Ach.title(compName, t);
+      DT.Board.titleWon(compName);
       DT.inbox({ title: `¡Campeones de la ${compName}!`, body: `El club levanta la ${compName} ${G.year}. La hinchada está de fiesta y la directiva te felicita.`, kind: 'title' });
       if (t.sponsor && t.sponsor.kind === 'titulos' && t.sponsor.bonus) {
         DT.E.add(t, 'Sponsors', t.sponsor.bonus);

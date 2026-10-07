@@ -97,6 +97,7 @@ DT.W = (function () {
       prevTables: {},
       abroad: [],
       settings: { speed: 2, diff: diff === 'real' ? 'real' : 'arcade' },
+      boardV2: 1,
     };
     const G = DT.G;
     for (const cc of DT.COUNTRY_ORDER) {

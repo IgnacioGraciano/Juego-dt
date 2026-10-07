@@ -60,6 +60,27 @@ DT.Board = (function () {
     return U.clamp(0.5 + (DT.AI.rating(me) - DT.AI.rating(opp) + home) * 0.045, 0.08, 0.92);
   };
 
+  // Posición actual en la liga frente al objetivo de la directiva.
+  B.standing = function () {
+    const G = DT.G;
+    const t = DT.userTeam();
+    const comp = G.season.comps[DT.divOf(t)];
+    if (!comp || !G.manager.obj || !comp.table[t.id]) return null;
+    return { pos: DT.S.sortTable(comp.table, comp.teams).indexOf(t.id) + 1, target: G.manager.obj.target, pj: comp.table[t.id].pj };
+  };
+
+  // Avanzar en las copas suma confianza (más cuanto más lejos).
+  B.cupProgress = function (bonus, what) {
+    const M = DT.G.manager;
+    M.conf = U.clamp(M.conf + bonus, 0, 100);
+    DT.news(`La directiva celebra: ${what}.`, 'club');
+  };
+  B.titleWon = function (compName) {
+    const M = DT.G.manager;
+    const big = /Libertadores|Intercontinental/.test(compName) || compName === DT.COUNTRIES[DT.userTeam().cc].league;
+    M.conf = U.clamp(M.conf + (big ? 15 : 8), 0, 100);
+  };
+
   B.afterMatch = function (match) {
     const G = DT.G;
     const me = G.user;
@@ -71,7 +92,13 @@ DT.Board = (function () {
     if (res === 1) M.g++; else if (res === 0) M.p++; else M.e++;
     const exp = B.expected(match);
     const derby = DT.isDerby(match.h, match.a);
-    M.conf = U.clamp(M.conf + (res - exp) * 7 * (derby ? 1.6 : 1), 0, 100);
+    // Ganar siempre suma algo; perder como favorito resta como máximo 4 y perder con un grande casi no resta.
+    // el empate vale un poco menos de medio triunfo: un chico que empata con un grande suma, pero poco
+    let d = ((res === 0.5 ? 0.42 : res) - exp) * 6.5;
+    if (res === 1) d = Math.max(d, 2);
+    else if (res === 0) d = Math.max(d, -4);
+    else d = U.clamp(d, -2, 1.5);
+    M.conf = U.clamp(M.conf + d * (derby ? 1.5 : 1), 0, 100);
     const opp = G.teams[match.h === me ? match.a : match.h];
     G.lastResult = { res, derby, opp: opp.n, mine, theirs, w: G.week, y: G.year };
     if (derby) {
@@ -115,7 +142,19 @@ DT.Board = (function () {
       M.conf -= 0.5;
     }
     if (DT.E.payroll(t) > DT.E.wageCap(t) * 1.1) M.conf -= 0.4;
+    // finanzas sanas: caja positiva y sueldos dentro del tope
+    else if (t.cash >= 0 && DT.E.payroll(t) <= DT.E.wageCap(t)) M.conf += 0.15;
+    // la tabla frente al objetivo: por arriba sube sola, por abajo baja
+    const st = B.standing();
+    if (st && st.pj >= 3) M.conf += st.pos <= st.target ? Math.min(0.9, 0.3 + (st.target - st.pos) * 0.12) : -Math.min(1.6, 0.1 + (st.pos - st.target - 1) * 0.25);
     M.conf = U.clamp(M.conf, 0, 100);
+    // ultimátum antes del despido (una vez por temporada)
+    if (M.conf < 25 && M.warned !== G.year && !G.pendingOffers) {
+      M.warned = G.year;
+      const body = `La directiva está preocupada (confianza ${Math.round(M.conf)}/100). Necesitan ver resultados ya: si la confianza baja de 12, te despiden.`;
+      DT.inbox({ title: 'Ultimátum de la directiva', body, kind: 'board' });
+      G.notices = (G.notices || []).concat([{ kind: 'msg', title: 'Ultimátum de la directiva', body }]);
+    }
     if (G.week === 20) {
       DT.inbox({ title: 'Mitad de temporada', body: `La directiva evalúa tu trabajo: confianza ${Math.round(M.conf)}/100. ${M.conf >= 60 ? 'Están conformes con el rumbo.' : M.conf >= 35 ? 'Esperan una mejora en la segunda mitad.' : 'Tu puesto corre peligro.'}`, kind: 'board' });
     }
@@ -123,7 +162,8 @@ DT.Board = (function () {
       const ending = t.squad.map((id) => G.players[id]).filter((p) => p.cy <= 1);
       if (ending.length) DT.inbox({ title: 'Contratos que vencen', body: `Terminan contrato a fin de año: ${ending.map((p) => `${p.n} (${p.ovr})`).join(', ')}. Renovalos desde su ficha o se irán libres.`, kind: 'squad' });
     }
-    if (G.week >= 10 && M.conf < 12 && !G.pendingOffers) B.fire('La directiva perdió la confianza en tu trabajo y decidió rescindir tu contrato.');
+    // no echan a un DT que está cumpliendo el objetivo en la tabla
+    if (G.week >= 10 && M.conf < 12 && !G.pendingOffers && !(st && st.pj >= 5 && st.pos <= st.target + 2)) B.fire('La directiva perdió la confianza en tu trabajo y decidió rescindir tu contrato.');
   };
 
   B.fire = function (reason) {

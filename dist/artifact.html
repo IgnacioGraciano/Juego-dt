@@ -2012,6 +2012,7 @@ DT.W = (function () {
       prevTables: {},
       abroad: [],
       settings: { speed: 2, diff: diff === 'real' ? 'real' : 'arcade' },
+      boardV2: 1,
     };
     const G = DT.G;
     for (const cc of DT.COUNTRY_ORDER) {
@@ -2626,6 +2627,27 @@ DT.Board = (function () {
     return U.clamp(0.5 + (DT.AI.rating(me) - DT.AI.rating(opp) + home) * 0.045, 0.08, 0.92);
   };
 
+  // Posición actual en la liga frente al objetivo de la directiva.
+  B.standing = function () {
+    const G = DT.G;
+    const t = DT.userTeam();
+    const comp = G.season.comps[DT.divOf(t)];
+    if (!comp || !G.manager.obj || !comp.table[t.id]) return null;
+    return { pos: DT.S.sortTable(comp.table, comp.teams).indexOf(t.id) + 1, target: G.manager.obj.target, pj: comp.table[t.id].pj };
+  };
+
+  // Avanzar en las copas suma confianza (más cuanto más lejos).
+  B.cupProgress = function (bonus, what) {
+    const M = DT.G.manager;
+    M.conf = U.clamp(M.conf + bonus, 0, 100);
+    DT.news(`La directiva celebra: ${what}.`, 'club');
+  };
+  B.titleWon = function (compName) {
+    const M = DT.G.manager;
+    const big = /Libertadores|Intercontinental/.test(compName) || compName === DT.COUNTRIES[DT.userTeam().cc].league;
+    M.conf = U.clamp(M.conf + (big ? 15 : 8), 0, 100);
+  };
+
   B.afterMatch = function (match) {
     const G = DT.G;
     const me = G.user;
@@ -2637,7 +2659,13 @@ DT.Board = (function () {
     if (res === 1) M.g++; else if (res === 0) M.p++; else M.e++;
     const exp = B.expected(match);
     const derby = DT.isDerby(match.h, match.a);
-    M.conf = U.clamp(M.conf + (res - exp) * 7 * (derby ? 1.6 : 1), 0, 100);
+    // Ganar siempre suma algo; perder como favorito resta como máximo 4 y perder con un grande casi no resta.
+    // el empate vale un poco menos de medio triunfo: un chico que empata con un grande suma, pero poco
+    let d = ((res === 0.5 ? 0.42 : res) - exp) * 6.5;
+    if (res === 1) d = Math.max(d, 2);
+    else if (res === 0) d = Math.max(d, -4);
+    else d = U.clamp(d, -2, 1.5);
+    M.conf = U.clamp(M.conf + d * (derby ? 1.5 : 1), 0, 100);
     const opp = G.teams[match.h === me ? match.a : match.h];
     G.lastResult = { res, derby, opp: opp.n, mine, theirs, w: G.week, y: G.year };
     if (derby) {
@@ -2681,7 +2709,19 @@ DT.Board = (function () {
       M.conf -= 0.5;
     }
     if (DT.E.payroll(t) > DT.E.wageCap(t) * 1.1) M.conf -= 0.4;
+    // finanzas sanas: caja positiva y sueldos dentro del tope
+    else if (t.cash >= 0 && DT.E.payroll(t) <= DT.E.wageCap(t)) M.conf += 0.15;
+    // la tabla frente al objetivo: por arriba sube sola, por abajo baja
+    const st = B.standing();
+    if (st && st.pj >= 3) M.conf += st.pos <= st.target ? Math.min(0.9, 0.3 + (st.target - st.pos) * 0.12) : -Math.min(1.6, 0.1 + (st.pos - st.target - 1) * 0.25);
     M.conf = U.clamp(M.conf, 0, 100);
+    // ultimátum antes del despido (una vez por temporada)
+    if (M.conf < 25 && M.warned !== G.year && !G.pendingOffers) {
+      M.warned = G.year;
+      const body = `La directiva está preocupada (confianza ${Math.round(M.conf)}/100). Necesitan ver resultados ya: si la confianza baja de 12, te despiden.`;
+      DT.inbox({ title: 'Ultimátum de la directiva', body, kind: 'board' });
+      G.notices = (G.notices || []).concat([{ kind: 'msg', title: 'Ultimátum de la directiva', body }]);
+    }
     if (G.week === 20) {
       DT.inbox({ title: 'Mitad de temporada', body: `La directiva evalúa tu trabajo: confianza ${Math.round(M.conf)}/100. ${M.conf >= 60 ? 'Están conformes con el rumbo.' : M.conf >= 35 ? 'Esperan una mejora en la segunda mitad.' : 'Tu puesto corre peligro.'}`, kind: 'board' });
     }
@@ -2689,7 +2729,8 @@ DT.Board = (function () {
       const ending = t.squad.map((id) => G.players[id]).filter((p) => p.cy <= 1);
       if (ending.length) DT.inbox({ title: 'Contratos que vencen', body: `Terminan contrato a fin de año: ${ending.map((p) => `${p.n} (${p.ovr})`).join(', ')}. Renovalos desde su ficha o se irán libres.`, kind: 'squad' });
     }
-    if (G.week >= 10 && M.conf < 12 && !G.pendingOffers) B.fire('La directiva perdió la confianza en tu trabajo y decidió rescindir tu contrato.');
+    // no echan a un DT que está cumpliendo el objetivo en la tabla
+    if (G.week >= 10 && M.conf < 12 && !G.pendingOffers && !(st && st.pj >= 5 && st.pos <= st.target + 2)) B.fire('La directiva perdió la confianza en tu trabajo y decidió rescindir tu contrato.');
   };
 
   B.fire = function (reason) {
@@ -3693,6 +3734,20 @@ DT.S = (function () {
       if (aggA !== aggB) tie.winner = aggA > aggB ? tie.a : tie.b;
       else tie.winner = match.pen[0] > match.pen[1] ? match.h : match.a;
     }
+    // el usuario pasó de ronda en una copa: la directiva lo valora
+    if (tie.winner && DT.isUser(tie.winner) && tie.stage !== 'F') {
+      const comp = G.season.comps[tie.c];
+      if (comp && comp.type === 'cup') {
+        const left = comp.rounds - (+String(tie.stage).slice(1)) + 1;
+        const k = +String(tie.stage).slice(1);
+        const next = k + 1 >= comp.rounds ? 'la final' : S.cupStageName(comp, 'R' + (k + 1)).toLowerCase();
+        DT.Board.cupProgress(left <= 2 ? 5 : left <= 3 ? 4 : left <= 4 ? 3 : 2, `${comp.name}: ${next}`);
+      } else if (comp && comp.type === 'cont') {
+        const b = { PO: 2, R16: 3, QF: 4, SF: 5 }[tie.stage] || 2;
+        const next = { PO: 'octavos de final', R16: 'cuartos de final', QF: 'semifinal', SF: 'la final' }[tie.stage] || 'la siguiente ronda';
+        DT.Board.cupProgress(b, `${comp.name}: ${next}`);
+      }
+    }
   };
 
   // Simula los partidos pendientes de la franja actual (excepto si se pide).
@@ -3805,6 +3860,8 @@ DT.S = (function () {
       const st = S.groupStandings(comp, gi);
       first.push({ t: st[0], g: gi }); second.push({ t: st[1], g: gi }); third.push({ t: st[2], g: gi });
     });
+    // clasificar a la siguiente fase suma confianza
+    if (first.concat(second).some((x) => DT.isUser(x.t))) DT.Board.cupProgress(3, `${comp.name}: clasificación a la fase final`);
     if (comp.id === 'LIB') {
       comp.thirds = third.map((x) => x.t);
       S.pairR16(comp, first, second);
@@ -3902,6 +3959,7 @@ DT.S = (function () {
       G.manager.titles.push({ y: G.year, c: compName, t: t.n });
       G.manager.rep = Math.min(100, G.manager.rep + (compName.includes('Libertadores') ? 8 : compName.includes('Intercontinental') ? 6 : compName.includes('Sudamericana') ? 5 : 3));
       DT.Ach.title(compName, t);
+      DT.Board.titleWon(compName);
       DT.inbox({ title: `¡Campeones de la ${compName}!`, body: `El club levanta la ${compName} ${G.year}. La hinchada está de fiesta y la directiva te felicita.`, kind: 'title' });
       if (t.sponsor && t.sponsor.kind === 'titulos' && t.sponsor.bonus) {
         DT.E.add(t, 'Sponsors', t.sponsor.bonus);
@@ -6680,7 +6738,7 @@ DT.Screens = (function () {
     const conf = Math.round(M.conf);
     return `<section class="card"><span class="up">Objetivo ${G.year}</span><div>${U.esc(M.obj ? M.obj.text : '')}</div>
         <div class="row between small"><span>Confianza de la directiva</span><b>${conf}/100</b></div><div class="bar ${conf < 30 ? 'bad' : conf < 50 ? 'warn' : ''}"><i style="width:${conf}%"></i></div>
-        <div class="small muted">Sube con victorias (sobre todo contra rivales más fuertes) y al cumplir el objetivo. Baja con derrotas, deudas o una masa salarial por encima del tope. Por debajo de 12 te despiden.</div></section>
+        <div class="small muted">Sube con victorias (sobre todo contra rivales más fuertes), al estar en la tabla por encima del objetivo, al avanzar en las copas y con las finanzas sanas. Baja con derrotas, al estar por debajo del objetivo, con deudas o con sueldos por encima del tope. Por debajo de 25 llega un ultimátum y por debajo de 12 te despiden, salvo que estés a 2 puestos o menos del objetivo.</div></section>
       ${Sc.interestCard()}
       <section class="card"><span class="up">Entrenador</span><h2>${U.esc(M.n)}</h2>
         <div class="kv"><div><span>Reputación</span><b>${Math.round(M.rep)}</b></div><div><span>Partidos</span><b>${M.pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${M.g}-${M.e}-${M.p}</b></div></div>
@@ -8385,6 +8443,18 @@ DT.Main = (function () {
     if (DT.G.settings.speed === 8) DT.G.settings.speed = 4;
     if (!DT.G.retired) DT.Acad.ensure(ut);
     if (!DT.G.wkSnap && !DT.G.retired && !DT.G.pendingOffers) DT.Week.snap();
+    // la directiva se volvió más justa: las partidas ya empezadas se reevalúan una vez
+    if (!DT.G.boardV2 && !DT.G.retired && !DT.G.pendingOffers) {
+      DT.G.boardV2 = 1;
+      const M = DT.G.manager;
+      const st = DT.Board.standing();
+      const before = Math.round(M.conf);
+      if (st && st.pj >= 3 && st.pos <= st.target) M.conf = Math.max(M.conf, 50);
+      else if (M.conf < 35) M.conf = Math.min(35, M.conf + 10);
+      if (Math.round(M.conf) > before) {
+        DT.G.notices = (DT.G.notices || []).concat([{ kind: 'msg', title: 'La directiva revisó tu evaluación', body: `Con los nuevos criterios (posición frente al objetivo, avance en las copas y finanzas), tu confianza pasa de ${before} a ${Math.round(M.conf)}.` }]);
+      }
+    }
     UI.tab = 'home';
     UI.compSel = null;
     UI.compCountry = null;
