@@ -20,6 +20,8 @@ module.exports = {
     'src/game/end.js',
     'src/game/actions.js',
     'src/game/events.js',
+    'src/game/academy.js',
+    'src/game/records.js',
     'src/game/save.js',
   ],
   ui: [

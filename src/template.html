@@ -124,6 +124,16 @@ h3 { font-size: 1.1rem; }
 .crest-wrap.crest-ok > .badge { visibility: hidden; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); } }
 :root[data-theme="dark"] .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); }
+.slot { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.slot:last-of-type { border-bottom: 0; }
+.slot .slotn { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--line); font-weight: 700; font-size: 0.8rem; flex: none; }
+.slot.empty { opacity: 0.75; }
+.achs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.ach { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; opacity: 0.6; }
+.ach .ic { font-size: 1.4rem; width: 30px; text-align: center; flex: none; }
+.ach.on { opacity: 1; border-color: var(--gold); background: var(--gold-soft); }
+.tension { display: flex; flex-direction: column; gap: 4px; }
+.tension .bar { height: 8px; }
 .diffpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .diffpick button { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
 .diffpick button b { font-family: var(--display); font-size: 1.1rem; }

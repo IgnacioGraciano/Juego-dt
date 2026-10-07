@@ -10,7 +10,7 @@ DT.Save = (function () {
     const out = Object.assign({}, G);
     out.players = Object.values(G.players).map((p) => {
       const arr = PF.map((k) => (typeof p[k] === 'number' ? Math.round(p[k] * 100) / 100 : p[k]));
-      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0, (p.num || p.loan || p.sellOn || p.nt) ? { num: p.num, loan: p.loan, sellOn: p.sellOn, nt: p.nt } : 0);
+      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0, (p.num || p.loan || p.sellOn || p.nt || p.acad || p.cl !== undefined || p.fromAcad) ? { num: p.num, loan: p.loan, sellOn: p.sellOn, nt: p.nt, acad: p.acad, cl: p.cl, fa: p.fromAcad } : 0);
       return arr;
     });
     const S = G.season;
@@ -49,6 +49,9 @@ DT.Save = (function () {
         if (ex.loan) p.loan = ex.loan;
         if (ex.sellOn) p.sellOn = ex.sellOn;
         if (ex.nt) p.nt = ex.nt;
+        if (ex.acad) p.acad = 1;
+        if (ex.cl !== undefined && ex.cl !== null) p.cl = ex.cl;
+        if (ex.fa) p.fromAcad = 1;
       }
       players[p.id] = p;
     }
@@ -56,6 +59,7 @@ DT.Save = (function () {
     for (const id in G.teams) G.teams[id].squad = [];
     for (const pid in players) {
       const p = players[pid];
+      if (p.acad) continue; // las inferiores se guardan en team.academy
       if (p.t && G.teams[p.t]) G.teams[p.t].squad.push(p.id);
       else p.t = null;
     }
@@ -101,11 +105,20 @@ DT.Save = (function () {
   Save.pack = async () => gz(Save.toJSON());
   Save.unpack = async (s) => Save.deserialize(JSON.parse(await gunz(s.trim())));
 
+  // Tres espacios de guardado en el dispositivo (el 1 usa la clave original).
+  Save.SLOTS = 3;
+  const keyOf = (n) => (n === 1 ? KEY : KEY + '_' + n);
+  Save.slot = 1;
+  try { Save.slot = Math.min(Save.SLOTS, Math.max(1, +(localStorage.getItem('dtsud_slot') || 1))); } catch (e) { /* sin almacenamiento */ }
+  Save.setSlot = function (n) {
+    Save.slot = n;
+    try { localStorage.setItem('dtsud_slot', String(n)); } catch (e) { /* sin almacenamiento */ }
+  };
   Save.local = async function () {
     try {
       const s = await Save.pack();
-      localStorage.setItem(KEY, s);
-      localStorage.setItem(KEY + '_meta', JSON.stringify(Save.meta()));
+      localStorage.setItem(keyOf(Save.slot), s);
+      localStorage.setItem(keyOf(Save.slot) + '_meta', JSON.stringify(Save.meta()));
       return true;
     } catch (e) {
       return false;
@@ -114,20 +127,26 @@ DT.Save = (function () {
   Save.meta = function () {
     const G = DT.G;
     const t = DT.userTeam();
-    return { team: t.n, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now(), retired: !!G.retired, fired: !!G.pendingOffers };
+    return { team: t.n, tid: t.id, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now(), retired: !!G.retired, fired: !!G.pendingOffers, diff: G.settings.diff };
   };
-  Save.localMeta = function () {
-    try { return JSON.parse(localStorage.getItem(KEY + '_meta') || 'null'); } catch (e) { return null; }
+  Save.localMeta = function (n) {
+    try { return JSON.parse(localStorage.getItem(keyOf(n || Save.slot) + '_meta') || 'null'); } catch (e) { return null; }
   };
-  Save.loadLocal = async function () {
+  Save.allMeta = function () {
+    const out = [];
+    for (let n = 1; n <= Save.SLOTS; n++) out.push(Save.localMeta(n));
+    return out;
+  };
+  Save.loadLocal = async function (n) {
     let s = null;
-    try { s = localStorage.getItem(KEY); } catch (e) { s = null; }
+    try { s = localStorage.getItem(keyOf(n || Save.slot)); } catch (e) { s = null; }
     if (!s) return false;
     await Save.unpack(s);
+    if (n) Save.setSlot(n);
     return true;
   };
-  Save.clearLocal = function () {
-    try { localStorage.removeItem(KEY); localStorage.removeItem(KEY + '_meta'); } catch (e) { /* sin acceso */ }
+  Save.clearLocal = function (n) {
+    try { localStorage.removeItem(keyOf(n || Save.slot)); localStorage.removeItem(keyOf(n || Save.slot) + '_meta'); } catch (e) { /* sin acceso */ }
   };
 
   // Guardado en la nube (capability db del artifact), en partes de 200 KB.

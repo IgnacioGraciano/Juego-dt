@@ -65,14 +65,18 @@ const { chromium } = require('playwright');
   await click('[data-a="mDone"]');
   // varias semanas más con resultado rápido
   for (let i = 0; i < 25; i++) {
+    // avisos (ofertas recibidas, inferiores): se cierran para seguir
+    while (await page.$('#modal:not([hidden])')) await click('#modal .sheet > [data-a="closeModal"]');
     const ms = await page.$$('[data-a="msgAct"]');
     if (ms.length) await click('[data-a="msgAct"]');
     await click('[data-a="advance"]');
     if (await page.$('#overlay:not([hidden])')) {
+      while (await page.$('#modal:not([hidden])')) await click('#modal .sheet > [data-a="closeModal"]');
       await click('[data-a="mQuick"]');
       await click('[data-a="mDone"]');
     }
   }
+  while (await page.$('#modal:not([hidden])')) await click('#modal .sheet > [data-a="closeModal"]');
   await shot('11-home-semana');
   await click('[data-a="tab"][data-tab="comp"]');
   await shot('12-tabla');
@@ -87,8 +91,8 @@ const { chromium } = require('playwright');
   const week = await page.evaluate(() => DT.G.week + ' ' + DT.G.year);
   // recargar y continuar
   await page.reload();
-  await page.waitForSelector('[data-a="loadLocal"]');
-  await click('[data-a="loadLocal"]');
+  await page.waitForSelector('[data-a="loadSlot"]');
+  await click('[data-a="loadSlot"]');
   const week2 = await page.evaluate(() => DT.G.week + ' ' + DT.G.year);
   await shot('16-recargado');
   if (process.env.LONG) {

@@ -14,6 +14,8 @@ DT.Screens = (function () {
     if (pending.length) {
       parts.push(`<section class="card"><div class="row between"><h2>Decisiones pendientes</h2><span class="pill gold">${pending.length}</span></div>${pending.map(Sc.msg).join('')}</section>`);
     }
+    const offers = DT.M.openOffers();
+    if (offers.length) parts.push(`<section class="card"><div class="row between"><h3>Ofertas por tus jugadores</h3><span class="pill gold">${offers.length}</span></div>${offers.map(Sc.offerCard).join('')}</section>`);
     parts.push(Sc.nextMatchCard());
     // Directiva
     const M = G.manager;
@@ -136,8 +138,8 @@ DT.Screens = (function () {
   // ================= PLANTEL =================
   Sc.squad = function () {
     const v = UI.sub.squad;
-    const seg = `<div class="seg">${[['xi', 'Once'], ['tac', 'Táctica'], ['list', 'Plantel']].map(([k, l]) => `<button class="${v === k ? 'on' : ''}" data-a="sub" data-k="squad" data-v="${k}">${l}</button>`).join('')}</div>`;
-    return seg + (v === 'xi' ? Sc.xi() : v === 'tac' ? Sc.tactics() : Sc.squadList());
+    const seg = `<div class="seg">${[['xi', 'Once'], ['tac', 'Táctica'], ['list', 'Plantel'], ['acad', 'Inferiores']].map(([k, l]) => `<button class="${v === k ? 'on' : ''}" data-a="sub" data-k="squad" data-v="${k}">${l}</button>`).join('')}</div>`;
+    return seg + (v === 'xi' ? Sc.xi() : v === 'tac' ? Sc.tactics() : v === 'acad' ? Sc.academy() : Sc.squadList());
   };
 
   const shortN = (p) => {
@@ -299,6 +301,22 @@ DT.Screens = (function () {
       <section class="card"><div class="list">${sort === 'pos' ? UI.grouped(ps, rowOf) : ps.map(rowOf).join('')}</div></section>`;
   };
   A.squadSort = (d) => { UI.sub.squadSort = d.v; UI.render(); };
+
+  // ================= INFERIORES =================
+  Sc.academy = function () {
+    const t = DT.userTeam();
+    DT.Acad.ensure(t);
+    const ps = DT.Acad.list(t).sort((a, b) => 'PDMA'.indexOf(a.pos) - 'PDMA'.indexOf(b.pos) || b.pot - a.pot || b.ovr - a.ovr);
+    const lvl = t.infra.youth;
+    const row = (p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años ${p.age >= DT.Acad.MAX_AGE ? '<span class="pill warn">Último año</span>' : ''}</div></div>
+      ${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span><button class="btn sm primary" data-a="acadPromote" data-id="${p.id}" aria-label="Subir a ${U.esc(p.n)}">Subir</button></div>`;
+    return `<section class="card">
+        <div class="row between"><h2>Inferiores</h2><span class="pill">${ps.length}/${DT.Acad.SIZE}</span></div>
+        <div class="kv"><div><span>Nivel</span><b>${'★'.repeat(lvl)}<span style="opacity:.25">${'★'.repeat(5 - lvl)}</span></b></div><div><span>Edades</span><b>14 a 21</b></div><div><span>Mejor proyección</span><b>${ps.length ? Math.max(...ps.map((p) => p.ovr)) : '—'}</b></div></div>
+        <div class="small muted">Los chicos entrenan y mejoran solos. Solo suben al primer equipo cuando vos los ascendés. Al cumplir 22, si no los subiste, se van libres. Cada fin de temporada llega una camada nueva (mejor cuanto más nivel tengan las inferiores: se mejoran en Club → Estadio).</div>
+      </section>
+      <section class="card"><div class="list">${UI.grouped(ps, row) || '<div class="empty">No hay juveniles.</div>'}</div></section>`;
+  };
 
   // ================= TORNEOS =================
   Sc.comp = function () {

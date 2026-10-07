@@ -124,6 +124,16 @@ h3 { font-size: 1.1rem; }
 .crest-wrap.crest-ok > .badge { visibility: hidden; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); } }
 :root[data-theme="dark"] .crest-wrap .crest { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); }
+.slot { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.slot:last-of-type { border-bottom: 0; }
+.slot .slotn { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--line); font-weight: 700; font-size: 0.8rem; flex: none; }
+.slot.empty { opacity: 0.75; }
+.achs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.ach { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; opacity: 0.6; }
+.ach .ic { font-size: 1.4rem; width: 30px; text-align: center; flex: none; }
+.ach.on { opacity: 1; border-color: var(--gold); background: var(--gold-soft); }
+.tension { display: flex; flex-direction: column; gap: 4px; }
+.tension .bar { height: 8px; }
 .diffpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .diffpick button { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
 .diffpick button b { font-family: var(--display); font-size: 1.1rem; }
@@ -1820,6 +1830,7 @@ DT.AI = (function () {
     }
     p.t = team.id;
     p.num = null;
+    delete p.cl; // contrato nuevo: la cláusula se genera de nuevo
     p.w = wage;
     p.cy = years;
     p.lst = false;
@@ -2032,10 +2043,14 @@ DT.W = (function () {
     const old = G.user;
     G.user = tid;
     const t = G.teams[tid];
+    // inferiores: solo se siguen las del club que dirige el usuario
+    if (old && old !== tid && G.teams[old]) { DT.Acad.drop(G.teams[old]); delete G.teams[old].academy; }
+    DT.Acad.ensure(t);
     // en modo realista el DT arranca sin nombre y tiene que hacer carrera
     if (first) G.manager.rep = G.settings.diff === 'real' ? U.clamp(t.rep - 18, 22, 45) : U.clamp(t.rep - 12, 35, 80);
     G.manager.conf = 60;
     G.manager.clubs.push({ id: tid, n: t.n, from: G.year });
+    if (DT.Ach) DT.Ach.job();
     t.xi = null;
     t.autoXI = true;
     DT.E.resetCap(t);
@@ -2744,6 +2759,10 @@ DT.Board = (function () {
       M.conf = Math.min(100, M.conf + 35);
       M.rep = Math.min(100, M.rep + 6);
       msg = `¡Ascenso! ${t.n} terminó ${finalPos}º y vuelve a jugar en ${DT.COUNTRIES[t.cc].league}. La directiva está feliz.`;
+      if (o && finalPos <= o.target && t.sponsor && t.sponsor.kind === 'objetivo' && t.sponsor.bonus) {
+        DT.E.add(t, 'Sponsors', t.sponsor.bonus);
+        msg += ` ${t.sponsor.name} pagó el premio por objetivo (${U.money(t.sponsor.bonus)}).`;
+      }
     } else if (o && finalPos <= o.target) {
       M.conf = Math.min(100, M.conf + 25);
       M.rep = Math.min(100, M.rep + (finalPos < o.target ? 4 : 2));
@@ -2822,26 +2841,41 @@ DT.M = (function () {
     if (!p.t) return { res: 'free' };
     if (!DT.S.windowOpen()) return { res: 'error', msg: 'El libro de pases está cerrado. Abre en las semanas 0–4 y 21–26.' };
     if (amount > M.budget(me)) return { res: 'error', msg: `La directiva no autoriza gastar más de ${U.money(M.budget(me))} (caja menos reserva para sueldos).` };
-    G.offersMade = G.offersMade || {};
-    const key = G.year + '_' + G.week + '_' + pid;
-    G.offersMade[key] = (G.offersMade[key] || 0) + 1;
-    if (G.offersMade[key] > 3) return { res: 'reject', msg: 'El club se cansó de las ofertas y no negocia más esta semana.' };
+    const T = M.buyTension(pid);
+    const club = G.teams[p.t].n;
+    if (T.lock) return { res: 'reject', msg: `${club} está ofendido y no negocia hasta la semana ${T.until}.`, tension: 100 };
     const ask = M.askingPrice(p);
     const ratio = amount / ask;
-    if (ratio >= 1 || (ratio >= 0.88 && U.chance(0.5))) return { res: 'accept', fee: amount };
-    if (ratio >= 0.6) {
-      const counter = U.round(Math.max(amount * 1.05, ask * U.rf(0.96, 1.06)), 10000);
-      return { res: 'counter', fee: counter, msg: `${G.teams[p.t].n} pide ${U.money(counter)}.` };
+    if (ratio >= 1 || (ratio >= 0.9 && U.chance(0.5 - T.v / 400))) return { res: 'accept', fee: amount, tension: T.v };
+    // la tensión crece cada vez más rápido cuanto más baja es la oferta
+    T.v = Math.min(100, T.v + 6 + 220 * Math.pow(Math.max(0, 1 - ratio), 1.6));
+    if (T.v >= 100) {
+      T.until = G.week + 4;
+      return { res: 'reject', msg: `${club} se cansó de las ofertas bajas y corta la negociación por 4 semanas.`, tension: 100 };
     }
-    return { res: 'reject', msg: `${G.teams[p.t].n} rechazó la oferta: la considera muy baja.` };
+    const counter = U.round(Math.max(amount * 1.05, ask * U.rf(0.98, 1.06) * (1 + T.v / 500)), 10000);
+    return { res: 'counter', fee: counter, msg: `${club} pide ${U.money(counter)}.`, tension: T.v };
+  };
+  // Tensión de la negociación por un jugador ajeno (baja con el paso de las semanas).
+  M.buyTension = function (pid) {
+    const G = DT.G;
+    G.buyT = G.buyT || {};
+    const now = G.year * 100 + G.week;
+    let T = G.buyT[pid];
+    if (!T || T.y !== G.year) T = G.buyT[pid] = { v: 0, w: now, y: G.year, until: 0 };
+    if (now > T.w) { T.v = Math.max(0, T.v - 15 * (now - T.w)); T.w = now; }
+    T.lock = T.until && G.week < T.until;
+    if (!T.lock && T.until) { T.until = 0; T.v = 40; }
+    return T;
   };
 
   // Negociación de contrato con el jugador.
-  M.contractTalk = function (pid, wage, years) {
+  M.contractTalk = function (pid, wage, years, clauseK) {
     const G = DT.G;
     const p = G.players[pid];
     const me = DT.userTeam();
     const d = DT.P.demand(p, me);
+    d.w = U.round(d.w * M.clauseOpt(clauseK).wage, 1000);
     if (p.t && p.t !== me.id) {
       G.willing = G.willing || {};
       if (G.willing[pid] === undefined) G.willing[pid] = DT.P.willingToJoin(p, me);
@@ -2854,7 +2888,7 @@ DT.M = (function () {
     return { res: 'counter', w: d.w, years: d.years, msg: `${p.n} pide ${U.money(d.w)} por año.` };
   };
 
-  M.completeSigning = function (pid, fee, wage, years) {
+  M.completeSigning = function (pid, fee, wage, years, clauseK, byClause) {
     const G = DT.G;
     const p = G.players[pid];
     const me = DT.userTeam();
@@ -2865,7 +2899,12 @@ DT.M = (function () {
       if (seller) M.settleSellOn(p, fee, seller);
     }
     DT.AI.addToTeam(me, p, wage, years);
+    p.cl = M.clauseAmount(p, clauseK);
     p.mor = 80;
+    if (DT.Ach) {
+      if (fee >= 5e6) DT.Ach.unlock('fichaje');
+      if (byClause) DT.Ach.unlock('clausula');
+    }
     DT.news(`${me.n} incorporó a ${p.n}${seller ? ` desde ${seller.n}` : ' (libre)'}${fee ? ` por ${U.money(fee)}` : ''}.`, 'transfer');
     if (seller) DT.AI.ensureSquad(seller);
   };
@@ -2878,6 +2917,7 @@ DT.M = (function () {
     if (!p || p.t !== me.id) return false;
     DT.E.add(me, 'Venta de jugadores', fee);
     M.settleSellOn(p, fee, me);
+    if (DT.Ach && fee >= 10e6) DT.Ach.unlock('venta');
     if (buyerId && G.teams[buyerId]) {
       const b = G.teams[buyerId];
       DT.E.add(b, 'Fichajes', -fee);
@@ -2910,14 +2950,50 @@ DT.M = (function () {
     DT.news(`${me.n} rescindió el contrato de ${p.n}.`, 'transfer');
   };
 
-  // Renovación de contrato del usuario.
-  M.renewDemand = function (p) {
-    const me = DT.userTeam();
-    const d = DT.P.demand(p, me);
-    d.w = Math.max(d.w, U.round(p.w * 1.05, 1000));
-    return d;
+  // ---------- Cláusulas de rescisión ----------
+  // Opciones al firmar o renovar: más baja = el jugador acepta cobrar menos.
+  M.CLAUSES = [
+    { k: 'low', label: 'Baja', mult: 1.5, wage: 0.95 },
+    { k: 'mid', label: 'Media', mult: 2.5, wage: 1 },
+    { k: 'high', label: 'Alta', mult: 4, wage: 1.06 },
+    { k: 'none', label: 'Sin cláusula', mult: 0, wage: 1.1 },
+  ];
+  M.clauseOpt = (k) => M.CLAUSES.find((c) => c.k === k) || M.CLAUSES[1];
+  M.clauseAmount = (p, k) => { const o = M.clauseOpt(k); return o.mult ? U.round(DT.P.value(p) * o.mult, 50000) : 0; };
+  // Cláusula vigente (0 = sin cláusula). Los jugadores de partidas anteriores reciben una al consultarla.
+  M.clause = function (p) {
+    if (!p || !p.t || p.acad) return 0;
+    if (p.cl === undefined) p.cl = U.chance(0.85) ? U.round(DT.P.value(p) * U.rf(1.8, 4), 50000) : 0;
+    return p.cl;
   };
-  M.renew = function (pid, wage, years) {
+
+  // Renovación de contrato del usuario. Los jóvenes piden aumento casi siempre;
+  // los veteranos pueden aceptar bajarse el sueldo (más probable cuanto más grandes).
+  M.renewDemand = function (p, clauseK) {
+    const G = DT.G;
+    const me = DT.userTeam();
+    const fair = DT.P.fairWage(p, me.cc);
+    const avg = DT.P.avgRating(p);
+    const perf = p.st.pj >= 5 ? U.clamp(1 + (avg - 6.6) * 0.12, 0.9, 1.2) : 1;
+    const mood = 0.95 + (100 - p.mor) / 600;
+    G.renewMood = G.renewMood || {};
+    const key = G.year + '_' + p.id;
+    if (G.renewMood[key] === undefined) G.renewMood[key] = Math.round(Math.random() * 1000) / 1000;
+    const roll = G.renewMood[key];
+    const cutChance = p.age >= 30 ? U.clamp((p.age - 29) * 0.13, 0, 0.75) : 0;
+    let w, cut = false;
+    if (roll < cutChance) {
+      w = Math.min(p.w * 0.97, Math.max(fair * perf * 0.95, p.w * (0.7 + roll * 0.3)));
+      cut = true;
+    } else {
+      const raise = p.age >= 30 ? 1.02 + (1 - roll) * 0.06 : 1.08 + roll * 0.14;
+      w = Math.max(fair * perf * mood, p.w * raise);
+    }
+    w *= M.clauseOpt(clauseK || 'mid').wage;
+    const years = p.age >= 33 ? 1 : p.age >= 30 ? (roll < 0.5 ? 1 : 2) : p.age >= 27 ? 2 + (roll < 0.5 ? 0 : 1) : 3 + Math.floor(roll * 2.99);
+    return { w: U.round(w, 1000), years, cut };
+  };
+  M.renew = function (pid, wage, years, clauseK) {
     const G = DT.G;
     const p = G.players[pid];
     const me = DT.userTeam();
@@ -2925,18 +3001,19 @@ DT.M = (function () {
     G.renewTries = G.renewTries || {};
     const key = G.year + '_' + pid;
     G.renewTries[key] = (G.renewTries[key] || 0) + 1;
-    if (G.renewTries[key] > 4) return { res: 'reject', msg: `${p.n} cortó las negociaciones por esta temporada.` };
-    const d = M.renewDemand(p);
+    if (G.renewTries[key] > 5) return { res: 'reject', msg: `${p.n} cortó las negociaciones por esta temporada.` };
+    const d = M.renewDemand(p, clauseK);
     const payroll = DT.E.payroll(me) - p.w;
     // renovar sin subir el sueldo siempre está permitido
     if (wage > p.w && payroll + wage > DT.E.wageCap(me)) return { res: 'board', msg: `Ese sueldo supera el tope salarial (${U.money(DT.E.wageCap(me))}). Ofrecé lo mismo que cobra hoy, liberá sueldos o pedile a la directiva que amplíe el tope.` };
-    if (wage >= d.w || (wage >= d.w * 0.93 && U.chance(0.5))) {
+    if (wage >= d.w || (wage >= d.w * 0.95 && U.chance(0.5))) {
       p.w = wage;
       p.cy = years;
+      p.cl = M.clauseAmount(p, clauseK);
       p.mor = Math.min(100, p.mor + 8);
       return { res: 'accept' };
     }
-    return { res: 'counter', w: d.w, years: d.years, msg: `${p.n} pide ${U.money(d.w)} por año durante ${d.years} años.` };
+    return { res: 'counter', w: d.w, years: d.years, msg: `${p.n} pide ${U.money(d.w)} por año${d.cut ? ' (acepta cobrar menos que hoy para seguir en el club)' : ''}.` };
   };
 
   // ---------- Futura venta ----------
@@ -3059,7 +3136,7 @@ DT.M = (function () {
       if (DT.isUser(t.id)) continue;
       for (const pid of t.squad.slice()) {
         const p = G.players[pid];
-        if (p.loan || !isForeignTarget(p) || !U.chance(0.022)) continue;
+        if (p.loan || !isForeignTarget(p) || !U.chance(p.sellOn ? 0.05 : 0.022)) continue;
         const fee = U.round(DT.P.value(p) * U.rf(0.9, 1.4), 50000);
         const club = U.pick(DT.FOREIGN_BUYERS);
         DT.E.add(t, 'Venta de jugadores', fee);
@@ -3072,8 +3149,10 @@ DT.M = (function () {
     }
     // Pases entre clubes sudamericanos
     for (let k = 0; k < 14; k++) M.aiTransfer(teams);
-    // Ofertas por jugadores del usuario
+    // Ofertas por jugadores del usuario y cláusulas pagadas
+    M.expireOffers(false);
     M.offersForUser();
+    M.clauseRaids();
   };
 
   M.aiTransfer = function (teams) {
@@ -3111,28 +3190,108 @@ DT.M = (function () {
     }
   };
 
+  // ---------- Ofertas recibidas por jugadores del usuario ----------
+  // Quedan en Mercado → Mis ventas: se aceptan de una o se negocian con una tensión que crece
+  // de forma exponencial cuanto más te alejás de lo que el club está dispuesto a pagar.
   M.makeUserOffer = function (p, buyer, fee) {
     const G = DT.G;
-    if (G.inbox.some((m) => m.data && m.data.pid === p.id && !m.done)) return;
+    G.offers = G.offers || [];
+    if (G.offers.some((o) => o.pid === p.id && o.st === 'open')) return;
     const name = buyer ? buyer.n : U.pick(DT.FOREIGN_BUYERS);
-    DT.inbox({
-      title: `Oferta por ${p.n}`,
-      body: `${name} ofrece ${U.money(fee)} por ${p.n} (${U.posName[p.pos]}, ${p.age} años, media ${p.ovr}). Valor estimado: ${U.money(DT.P.value(p))}.`,
-      kind: 'transfer',
-      actions: [
-        { id: 'sell', label: `Aceptar ${U.money(fee)}` },
-        ...(buyer ? [{ id: 'sellOn', label: `Aceptar ${U.money(U.round(fee * 0.85, 10000))} + 20% de futura venta`, sub: 'Cobrás menos ahora, pero te llevás el 20% si lo vuelven a vender.' }] : []),
-        { id: 'counter', label: `Pedir ${U.money(U.round(fee * 1.25, 10000))}` },
-        { id: 'reject', label: 'Rechazar' },
-      ],
-      data: { pid: p.id, buyer: buyer ? buyer.id : null, buyerName: name, fee },
-    });
+    const o = { id: (G.nextOffer = (G.nextOffer || 0) + 1), pid: p.id, buyer: buyer ? buyer.id : null, name, fee, max: U.round(fee * U.rf(1.1, 1.45), 10000), t: 0, st: 'open', y: G.year, w: G.week, r: 0, log: [] };
+    G.offers.unshift(o);
+    if (G.offers.length > 30) G.offers.length = 30;
+    DT.inbox({ title: `Oferta por ${p.n}`, body: `${name} ofrece ${U.money(fee)} por ${p.n} (${U.posName[p.pos]}, ${p.age} años, media ${p.ovr}). Respondé desde Mercado → Mis ventas.`, kind: 'transfer' });
+    G.notices = (G.notices || []).concat([{ kind: 'offer', oid: o.id }]);
+  };
+  M.openOffers = () => (DT.G.offers || []).filter((o) => o.st === 'open' && DT.G.players[o.pid] && DT.G.players[o.pid].t === DT.G.user);
+  M.getOffer = (oid) => (DT.G.offers || []).find((o) => o.id === oid);
+  const offerMax = (o, sellOn) => o.max * (sellOn ? 0.88 : 1);
+  M.offerAccept = function (oid, sellOn) {
+    const G = DT.G;
+    const o = M.getOffer(oid);
+    if (!o || o.st !== 'open') return { ok: false, msg: 'La oferta ya no está vigente.' };
+    const p = G.players[o.pid];
+    if (!p || p.t !== G.user) { o.st = 'gone'; return { ok: false, msg: 'El jugador ya no está en el club.' }; }
+    if (!DT.S.windowOpen()) return { ok: false, msg: 'El libro de pases está cerrado.' };
+    M.sellUser(o.pid, o.buyer, o.fee, o.name);
+    if (sellOn && o.buyer) p.sellOn = { tid: G.user, pct: 0.2 };
+    o.st = 'done';
+    return { ok: true, msg: `Vendiste a ${p.n} a ${o.name} por ${U.money(o.fee)}${sellOn && o.buyer ? ' y te quedás con el 20% de una futura venta' : ''}.` };
+  };
+  M.offerReject = function (oid) {
+    const o = M.getOffer(oid);
+    if (!o || o.st !== 'open') return;
+    o.st = 'rejected';
+    const p = DT.G.players[o.pid];
+    if (p && o.fee > DT.P.value(p) * 1.2 && p.ovr >= 70) p.mor = Math.max(10, p.mor - 12);
+  };
+  // Contrapropuesta del usuario: pide `ask`, opcionalmente con 20% de futura venta.
+  M.offerCounter = function (oid, ask, sellOn) {
+    const G = DT.G;
+    const o = M.getOffer(oid);
+    if (!o || o.st !== 'open') return { res: 'gone', msg: 'La oferta ya no está vigente.' };
+    const mx = offerMax(o, sellOn && o.buyer);
+    o.r++;
+    if (ask <= o.fee) return { res: 'accept', fee: o.fee, msg: `${o.name} mantiene ${U.money(o.fee)}.` };
+    if (ask <= mx) {
+      o.fee = ask;
+      o.log.unshift(`Aceptan ${U.money(ask)}.`);
+      return { res: 'accept', fee: ask, msg: `${o.name} acepta pagar ${U.money(ask)}.` };
+    }
+    const gap = ask / mx - 1;
+    o.t = Math.min(100, o.t + 8 + 240 * Math.pow(gap, 1.5));
+    if (o.t >= 100) {
+      o.st = 'walked';
+      o.log.unshift('Se retiraron.');
+      return { res: 'walk', msg: `${o.name} se levantó de la mesa: la negociación terminó.` };
+    }
+    const next = U.round(Math.min(mx, o.fee + (ask - o.fee) * U.rf(0.25, 0.5)), 10000);
+    if (next > o.fee) o.fee = next;
+    const msg = o.r >= 5 ? `${o.name}: "${U.money(o.fee)} es nuestra última oferta."` : `${o.name} sube a ${U.money(o.fee)}.`;
+    o.log.unshift(msg);
+    return { res: 'counter', fee: o.fee, msg };
+  };
+  // Ofertas que vencen: dos semanas sin respuesta o el cierre del libro de pases.
+  M.expireOffers = function (all) {
+    const G = DT.G;
+    for (const o of G.offers || []) {
+      if (o.st !== 'open') continue;
+      if (all || G.year * 100 + G.week - (o.y * 100 + o.w) >= 3) o.st = 'expired';
+    }
+  };
+
+  // Clubes que pagan la cláusula de un jugador del usuario (no se puede negar).
+  M.clauseRaids = function () {
+    const G = DT.G;
+    const me = DT.userTeam();
+    for (const pid of me.squad.slice()) {
+      const p = G.players[pid];
+      if (!p || p.loan) continue;
+      const cl = M.clause(p);
+      if (!cl) continue;
+      const v = DT.P.value(p);
+      let chance = 0;
+      if (cl <= v * 1.4) chance = 0.03;
+      else if (cl <= v * 2.2 && isForeignTarget(p)) chance = 0.008;
+      if (!U.chance(chance)) continue;
+      const buyers = Object.values(G.teams).filter((t) => DT.inLeague(t) && !t.eur && t.id !== me.id && t.cash > cl * 1.1 && t.rep >= me.rep - 8);
+      const foreign = isForeignTarget(p) || !buyers.length;
+      const b = foreign ? null : U.pick(buyers);
+      const name = b ? b.n : U.pick(DT.FOREIGN_BUYERS);
+      if (b) M.sellUser(pid, b.id, cl, name);
+      else { DT.E.add(me, 'Venta de jugadores', cl); M.settleSellOn(p, cl, me); DT.AI.release(me, p); p.from = me.n; M.goAbroad(p, cl, name); }
+      const body = `${name} pagó la cláusula de rescisión de ${p.n} (${U.money(cl)}) y se lo lleva. No se puede negar: la plata ya está en la caja.`;
+      DT.inbox({ title: `Pagaron la cláusula de ${p.n}`, body, kind: 'money' });
+      G.notices = (G.notices || []).concat([{ kind: 'msg', title: `Pagaron la cláusula de ${p.n}`, body }]);
+      return;
+    }
   };
 
   M.offersForUser = function () {
     const G = DT.G;
     const me = DT.userTeam();
-    const pending = G.inbox.filter((m) => m.kind === 'transfer' && m.actions && !m.done).length;
+    const pending = M.openOffers().length;
     if (pending >= 3) return;
     for (const pid of me.squad) {
       const p = G.players[pid];
@@ -3190,6 +3349,7 @@ DT.M = (function () {
     }
     // ofertas pendientes vencen
     for (const m of G.inbox) if (m.kind === 'transfer' && m.actions && !m.done) { m.done = true; m.result = 'Vencida: se cerró el libro de pases.'; }
+    M.expireOffers(true);
   };
 
   return M;
@@ -3498,8 +3658,11 @@ DT.S = (function () {
       if (match.ag > match.hg) DT.E.prize(away, P.win);
     }
     if (match.tie) S.resolveTie(G.season.ties[match.tie], match);
-    // Directiva y estadísticas del DT
-    if (DT.isUser(match.h) || DT.isUser(match.a)) DT.Board.afterMatch(match);
+    // Directiva, estadísticas del DT, récords y logros
+    if (DT.isUser(match.h) || DT.isUser(match.a)) {
+      DT.Board.afterMatch(match);
+      DT.Rec.match(match, sim);
+    }
   };
 
   S.resolveTie = function (tie, match) {
@@ -3721,6 +3884,7 @@ DT.S = (function () {
     if (DT.isUser(tid)) {
       G.manager.titles.push({ y: G.year, c: compName, t: t.n });
       G.manager.rep = Math.min(100, G.manager.rep + (compName.includes('Libertadores') ? 8 : compName.includes('Intercontinental') ? 6 : compName.includes('Sudamericana') ? 5 : 3));
+      DT.Ach.title(compName, t);
       DT.inbox({ title: `¡Campeones de la ${compName}!`, body: `El club levanta la ${compName} ${G.year}. La hinchada está de fiesta y la directiva te felicita.`, kind: 'title' });
       if (t.sponsor && t.sponsor.kind === 'titulos' && t.sponsor.bonus) {
         DT.E.add(t, 'Sponsors', t.sponsor.bonus);
@@ -3793,6 +3957,7 @@ DT.S = (function () {
         p.mor += (65 - p.mor) * 0.04;
       }
     }
+    DT.Acad.weekly(DT.userTeam());
     DT.M.weekly();
     DT.Board.weekly();
     if (!DT.G.pendingOffers) DT.Ev.weekly();
@@ -3936,6 +4101,8 @@ DT.End = (function () {
     }
 
     DT.Board.seasonEnd(userPos, userRelegated, userPromoted);
+    DT.Rec.season(userPos, hist.user.div);
+    DT.Ach.season(userPromoted);
 
     // Finanzas: cierre del ejercicio
     for (const id in G.teams) if (!G.teams[id].eur) DT.E.closeSeason(G.teams[id]);
@@ -4020,6 +4187,7 @@ DT.End = (function () {
       const team = p.t ? G.teams[p.t] : null;
       if (team && team.eur) continue;
       DT.P.ageUp(p);
+      if (p.acad) continue; // inferiores: se resuelven aparte
       p.fit = 100; p.sus = 0; p.yc = 0;
       p.inj = Math.max(0, p.inj - 6);
       if (U.chance(DT.P.retireChance(p))) {
@@ -4039,37 +4207,24 @@ DT.End = (function () {
         }
       }
     }
-    // Joyas de inferiores que esperaban a fin de temporada
-    const promotedKids = [];
-    for (const y of G.pendingYouth || []) {
-      const t = G.teams[y.t];
-      if (!t || !DT.isUser(t.id)) continue;
-      const p = DT.P.create({ n: y.n, pos: y.pos, age: y.age + 1, ovr: y.ovr, pot: y.pot, t: t.id, cy: 4, yt: true });
-      p.w = 15000;
-      t.squad.push(p.id);
-      promotedKids.push(p.id);
-    }
+    // Inferiores del usuario: se van los mayores de 21 y llegan chicos nuevos
+    const acad = DT.Acad.seasonEnd(me);
     G.pendingYouth = [];
     // IA: renovaciones, juveniles y completar planteles
     for (const id in G.teams) {
       const t = G.teams[id];
       if (t.eur) continue;
-      if (!DT.isUser(id)) DT.AI.renewals(t);
-      const n = 2 + (t.infra.youth >= 4 ? 1 : 0) + (U.chance(0.4) ? 1 : 0);
-      const kids = [];
-      for (let i = 0; i < n; i++) {
-        const k = DT.P.youth(t);
-        t.squad.push(k.id);
-        kids.push(k);
-      }
       if (DT.isUser(id)) {
-        // aviso en pantalla con los juveniles que subieron al plantel
-        G.notices = (G.notices || []).concat([{ kind: 'youth', title: 'Suben juveniles al primer equipo', pids: promotedKids.concat(kids.map((k) => k.id)) }]);
-        DT.inbox({ title: 'Suben juveniles de la cantera', body: kids.map((k) => `${k.n} (${U.posName[k.pos]}, ${k.age} años, media ${k.ovr}, potencial ${'★'.repeat(DT.P.stars(k.pot))})`).join('. ') + '.', kind: 'squad' });
-      } else {
-        DT.AI.ensureSquad(t);
-        DT.AI.trimSquad(t, 30);
+        // el usuario no recibe juveniles automáticos: los asciende él desde las inferiores
+        G.notices = (G.notices || []).concat([{ kind: 'acad', title: 'Llegaron chicos a las inferiores', pids: acad.arrived, left: acad.left, cut: acad.cut }]);
+        DT.inbox({ title: 'Movimientos en las inferiores', body: `Llegaron ${acad.arrived.length} chicos nuevos.${acad.left.length ? ` Se fueron libres por edad: ${acad.left.join(', ')}.` : ''}${acad.cut.length ? ` Quedaron afuera por cupo: ${acad.cut.join(', ')}.` : ''}`, kind: 'squad' });
+        continue;
       }
+      DT.AI.renewals(t);
+      const n = 2 + (t.infra.youth >= 4 ? 1 : 0) + (U.chance(0.4) ? 1 : 0);
+      for (let i = 0; i < n; i++) t.squad.push(DT.P.youth(t).id);
+      DT.AI.ensureSquad(t);
+      DT.AI.trimSquad(t, 30);
     }
     // Libres: limitar la bolsa
     const free = Object.values(G.players).filter((p) => !p.t);
@@ -4382,7 +4537,7 @@ DT.Ev = (function () {
         return {
           title: 'Una joya en las inferiores',
           body: `Los entrenadores de inferiores hablan maravillas de ${n} (${U.posLong[pos].toLowerCase()}, ${age} años). Dicen que puede ser crack.`,
-          opts: [['Subirlo al primer equipo ya', 'Suma minutos de entrenamiento con los grandes.'], ['Dejarlo madurar', 'Sube a fin de temporada, algo más formado.']],
+          opts: [['Subirlo al primer equipo ya', 'Suma minutos de entrenamiento con los grandes.'], ['Dejarlo madurar en las inferiores', 'Lo ascendés cuando quieras desde Plantel → Inferiores.']],
           n, pos, age, ovr, pot,
         };
       },
@@ -4393,8 +4548,15 @@ DT.Ev = (function () {
           p.w = 15000; t.squad.push(p.id);
           return `${d.n} ya entrena con el primer equipo.`;
         }
-        DT.G.pendingYouth = (DT.G.pendingYouth || []).concat([{ n: d.n, pos: d.pos, age: d.age, ovr: d.ovr + 3, pot: Math.min(93, d.pot + 2), t: t.id }]);
-        return `${d.n} subirá al plantel a fin de temporada.`;
+        const k = DT.P.create({ n: d.n, pos: d.pos, age: d.age, ovr: d.ovr, pot: Math.min(93, d.pot + 2), t: t.id, cy: 1, yt: true });
+        k.acad = 1; k.w = 0; k.cl = 0;
+        t.academy = (t.academy || []).concat([k.id]);
+        // si se pasa del cupo, sale el de menor proyección
+        if (t.academy.length > DT.Acad.SIZE) {
+          const worst = DT.Acad.list(t).filter((p) => p.id !== k.id).sort((a, b) => a.pot - b.pot)[0];
+          if (worst) DT.Acad.release(worst.id);
+        }
+        return `${d.n} se suma a las inferiores. Lo podés ascender cuando quieras.`;
       },
     },
     callUp: {
@@ -4675,6 +4837,278 @@ DT.Ev = (function () {
   return Ev;
 })();
 
+// ---- src/game/academy.js ----
+// Inferiores del club del usuario: 18 juveniles de 14 a 21 años que solo suben al primer equipo
+// cuando el DT los asciende. Al cumplir 22 se van libres.
+DT.Acad = (function () {
+  const U = DT.U;
+  const A = {};
+  A.SIZE = 18;
+  A.MIN_AGE = 14;
+  A.MAX_AGE = 21;
+
+  A.list = (team) => ((team && team.academy) || []).map((id) => DT.G.players[id]).filter(Boolean);
+
+  // Un juvenil: la media depende de la edad; el potencial, del nivel de las inferiores y del club.
+  A.kid = function (team, age) {
+    const lvl = team.infra.youth;
+    const at18 = 38 + lvl * 3 + Math.round((team.rep - 50) / 7);
+    const ovr = U.clamp(Math.round(at18 - (18 - age) * 4.5 + U.ri(-4, 6)), 22, 72);
+    let pot = at18 + U.ri(8, 24) + lvl * 2;
+    if (U.chance(0.04 + lvl * 0.015)) pot += U.ri(5, 10); // joya
+    pot = U.clamp(pot, ovr + 4, 93);
+    const pos = U.weighted(['P', 'D', 'M', 'A'], [1, 3, 3, 2.5]);
+    const p = DT.P.create({ n: DT.P.genName(team.cc), pos, age, ovr, pot, t: team.id, cy: 1, yt: true });
+    p.acad = 1;
+    p.w = 0;
+    p.cl = 0;
+    return p;
+  };
+  const youngAge = () => U.weighted([14, 15, 16, 17, 18, 19, 20, 21], [4, 4, 3.5, 3, 2.5, 2, 1.5, 1]);
+
+  // Arma las inferiores si el club no tiene (club nuevo del usuario o partidas anteriores).
+  // Los lugares que quedan libres al subir o soltar chicos se llenan con la camada de fin de año.
+  A.ensure = function (team) {
+    if (team.academy) { team.academy = team.academy.filter((id) => DT.G.players[id]); return; }
+    team.academy = [];
+    while (team.academy.length < A.SIZE) team.academy.push(A.kid(team, youngAge()).id);
+  };
+
+  // Al dejar un club, sus inferiores dejan de seguirse.
+  A.drop = function (team) {
+    for (const id of team.academy || []) delete DT.G.players[id];
+    team.academy = [];
+  };
+
+  A.promote = function (pid) {
+    const G = DT.G;
+    const team = DT.userTeam();
+    const p = G.players[pid];
+    if (!p || !p.acad || p.t !== team.id) return { ok: false, msg: 'El juvenil ya no está en las inferiores.' };
+    team.academy = team.academy.filter((id) => id !== pid);
+    delete p.acad;
+    p.cy = 3;
+    p.w = Math.max(12000, U.round(DT.P.fairWage(p, team.cc) * 0.6, 1000));
+    p.cl = U.round(DT.P.value(p) * 3, 5000);
+    p.mor = 85;
+    p.num = null;
+    team.squad.push(pid);
+    p.fromAcad = 1;
+    DT.news(`${p.n} (${p.age} años) sube al primer equipo de ${team.n}.`, 'squad');
+    if (DT.Ach) DT.Ach.unlock('debut');
+    return { ok: true, msg: `${p.n} ya es parte del primer equipo (contrato por 3 años).` };
+  };
+
+  A.release = function (pid) {
+    const team = DT.userTeam();
+    const p = DT.G.players[pid];
+    if (!p || !p.acad) return;
+    team.academy = team.academy.filter((id) => id !== pid);
+    delete DT.G.players[pid];
+  };
+
+  A.weekly = function (team) {
+    for (const p of A.list(team)) DT.P.weeklyDevelop(p, team.infra.youth, U.chance(0.6));
+  };
+
+  // Fin de temporada (después de los cumpleaños): se van los mayores de 21 y llegan chicos nuevos.
+  A.seasonEnd = function (team) {
+    const G = DT.G;
+    const left = [], arrived = [], cut = [];
+    for (const p of A.list(team)) {
+      if (p.age > A.MAX_AGE) {
+        team.academy = team.academy.filter((id) => id !== p.id);
+        left.push(p.n);
+        // queda libre: otro club lo puede fichar
+        delete p.acad;
+        p.t = null;
+        p.w = DT.P.fairWage(p, team.cc);
+        p.cy = 0;
+      }
+    }
+    const n = Math.max(3 + (team.infra.youth >= 4 ? 1 : 0), A.SIZE - team.academy.length);
+    for (let i = 0; i < n; i++) {
+      const k = A.kid(team, U.chance(0.75) ? 14 : 15);
+      team.academy.push(k.id);
+      arrived.push(k.id);
+    }
+    // cupo de 18: quedan afuera los de menor proyección (no los recién llegados)
+    while (team.academy.length > A.SIZE) {
+      const worst = A.list(team).filter((p) => !arrived.includes(p.id)).sort((a, b) => a.pot - b.pot)[0];
+      if (!worst) break;
+      cut.push(worst.n);
+      A.release(worst.id);
+    }
+    return { left, arrived, cut };
+  };
+
+  return A;
+})();
+
+// ---- src/game/records.js ----
+// Récords históricos del club que dirige el usuario y logros de la carrera.
+DT.Rec = (function () {
+  const U = DT.U;
+  const R = {};
+
+  R.of = function (tid) {
+    const G = DT.G;
+    G.rec = G.rec || {};
+    if (!G.rec[tid]) G.rec[tid] = { since: G.year, games: [0, 0, 0, 0, 0, 0], pl: {}, bigW: null, bigL: null, unb: [0, 0, 0], wins: [0, 0, 0], h2h: {}, att: null, seasonG: null, bestPos: null };
+    return G.rec[tid];
+  };
+
+  // Partido del usuario: totales, rachas, goleadas, historial contra cada rival y jugadores.
+  R.match = function (match, sim) {
+    const G = DT.G;
+    const side = sim.s[0].tid === G.user ? 0 : sim.s[1].tid === G.user ? 1 : -1;
+    if (side < 0) return;
+    const r = R.of(G.user);
+    const me = sim.s[side], opp = sim.s[1 - side];
+    const gf = me.goals, ga = opp.goals;
+    const oppT = G.teams[opp.tid];
+    const comp = DT.S.compName(match.c);
+    const res = gf > ga ? 0 : gf === ga ? 1 : 2;
+    r.games[0]++; r.games[1 + res]++; r.games[4] += gf; r.games[5] += ga;
+    const h = (r.h2h[opp.tid] = r.h2h[opp.tid] || [oppT.n, 0, 0, 0, 0, 0, 0]);
+    h[0] = oppT.n; h[1]++; h[2 + res]++; h[5] += gf; h[6] += ga;
+    const diff = gf - ga;
+    if (diff > 0 && (!r.bigW || diff > r.bigW[0] - r.bigW[1] || (diff === r.bigW[0] - r.bigW[1] && gf > r.bigW[0]))) r.bigW = [gf, ga, oppT.n, G.year, comp];
+    if (diff < 0 && (!r.bigL || -diff > r.bigL[1] - r.bigL[0] || (-diff === r.bigL[1] - r.bigL[0] && ga > r.bigL[1]))) r.bigL = [gf, ga, oppT.n, G.year, comp];
+    r.unb[0] = res < 2 ? r.unb[0] + 1 : 0;
+    if (r.unb[0] > r.unb[1]) { r.unb[1] = r.unb[0]; r.unb[2] = G.year; }
+    r.wins[0] = res === 0 ? r.wins[0] + 1 : 0;
+    if (r.wins[0] > r.wins[1]) { r.wins[1] = r.wins[0]; r.wins[2] = G.year; }
+    if (match.h === G.user && !match.n && match.att && (!r.att || match.att > r.att[0])) r.att = [match.att, oppT.n, G.year];
+    for (const pid of me.played) {
+      const p = G.players[pid];
+      if (!p) continue;
+      const x = (r.pl[pid] = r.pl[pid] || [p.n, 0, 0, 0]);
+      x[0] = p.n; x[1]++;
+    }
+    for (const sc of sim.scorers || []) {
+      if (sc.side !== side) continue;
+      if (r.pl[sc.pid]) r.pl[sc.pid][2]++;
+      if (sc.aid && r.pl[sc.aid]) r.pl[sc.aid][3]++;
+    }
+    DT.Ach.afterMatch(match, sim, side, r);
+  };
+
+  // Fin de temporada: goleador de la temporada y mejor posición.
+  R.season = function (pos, divName) {
+    const G = DT.G;
+    const t = DT.userTeam();
+    const r = R.of(t.id);
+    for (const pid of t.squad) {
+      const p = G.players[pid];
+      if (p && p.st.g > 0 && (!r.seasonG || p.st.g > r.seasonG[1])) r.seasonG = [p.n, p.st.g, G.year];
+    }
+    const lvl = t.lg ? 1 : 2;
+    if (pos && (!r.bestPos || lvl < r.bestPos[2] || (lvl === r.bestPos[2] && pos < r.bestPos[0]))) r.bestPos = [pos, G.year, lvl, divName];
+  };
+
+  return R;
+})();
+
+DT.Ach = (function () {
+  const A = {};
+  // [id, emoji, título, descripción]
+  A.LIST = [
+    ['win1', '⚽', 'Primer triunfo', 'Ganá tu primer partido como DT.'],
+    ['goleada', '🔥', 'Baile', 'Ganá un partido por 4 goles o más.'],
+    ['batacazo', '😱', 'Batacazo', 'Ganale a un rival con 6 puntos más de media que tu equipo.'],
+    ['clasico', '🏟️', 'Dueño de la ciudad', 'Ganá un clásico.'],
+    ['remontada', '🔄', 'Remontada épica', 'Ganá un partido que ibas perdiendo por 2 goles.'],
+    ['penales', '🧤', 'Nervios de acero', 'Ganá una serie por penales.'],
+    ['racha5', '📈', 'Racha', 'Ganá 5 partidos seguidos.'],
+    ['invicto10', '🛡️', 'Invicto', 'Llegá a 10 partidos sin perder.'],
+    ['dt100', '💯', 'Centenario', 'Dirigí 100 partidos.'],
+    ['dt300', '🎖️', 'Leyenda del banco', 'Dirigí 300 partidos.'],
+    ['liga', '🏆', 'Campeón', 'Ganá una liga de primera división.'],
+    ['copa', '🥇', 'Copero', 'Ganá una copa nacional.'],
+    ['doblete', '✌️', 'Doblete', 'Ganá la liga y la copa nacional en la misma temporada.'],
+    ['lib', '🌎', 'Gloria eterna', 'Ganá la Copa Libertadores.'],
+    ['sud', '🌐', 'Sudamericano', 'Ganá la Copa Sudamericana.'],
+    ['rec', '🔁', 'Recopa', 'Ganá la Recopa Sudamericana.'],
+    ['int', '🌍', 'Campeón del mundo', 'Ganá la Copa Intercontinental.'],
+    ['ascenso', '⬆️', 'Ascenso', 'Ascendé a primera división.'],
+    ['chico', '🐜', 'Hazaña', 'Salí campeón de liga con un club de reputación menor a 72.'],
+    ['trotamundos', '🧳', 'Trotamundos', 'Dirigí clubes de 3 países distintos.'],
+    ['debut', '🌱', 'Semillero', 'Subí un juvenil de las inferiores al primer equipo.'],
+    ['joya', '💎', 'Joya de la casa', 'Que un jugador surgido de tus inferiores llegue a 80 de media.'],
+    ['fichaje', '💰', 'Fichaje bomba', 'Pagá 5 millones o más por un jugador.'],
+    ['venta', '🤑', 'Venta millonaria', 'Vendé un jugador por 10 millones o más.'],
+    ['clausula', '📝', 'Cláusula ejecutada', 'Pagá la cláusula de rescisión de un jugador.'],
+  ];
+  const byId = Object.fromEntries(A.LIST.map((x) => [x[0], x]));
+
+  A.unlock = function (id) {
+    const G = DT.G;
+    if (!G || !byId[id]) return;
+    G.ach = G.ach || {};
+    if (G.ach[id]) return;
+    G.ach[id] = [G.year, G.week];
+    G.achNew = (G.achNew || []).concat([id]);
+    DT.news(`Logro desbloqueado: ${byId[id][2]}.`, 'club');
+  };
+  A.info = (id) => byId[id];
+
+  A.afterMatch = function (match, sim, side, r) {
+    const G = DT.G;
+    const me = sim.s[side], opp = sim.s[1 - side];
+    const won = me.goals > opp.goals || (sim.pens && sim.pens[side] > sim.pens[1 - side]);
+    if (me.goals > opp.goals) {
+      A.unlock('win1');
+      if (me.goals - opp.goals >= 4) A.unlock('goleada');
+      if (DT.AI.rating(G.teams[opp.tid]) - DT.AI.rating(G.teams[me.tid]) >= 6) A.unlock('batacazo');
+      if (DT.isDerby(match.h, match.a)) A.unlock('clasico');
+      // remontada: en algún momento perdía por 2
+      let a = 0, b = 0, down2 = false;
+      for (const sc of (sim.scorers || []).slice().sort((x, y) => x.m - y.m)) {
+        if (sc.side === side) a++; else b++;
+        if (b - a >= 2) down2 = true;
+      }
+      if (down2) A.unlock('remontada');
+    }
+    if (sim.pens && won) A.unlock('penales');
+    if (r.wins[0] >= 5) A.unlock('racha5');
+    if (r.unb[0] >= 10) A.unlock('invicto10');
+    const pj = G.manager.pj;
+    if (pj >= 100) A.unlock('dt100');
+    if (pj >= 300) A.unlock('dt300');
+  };
+
+  A.title = function (compName, team) {
+    const G = DT.G;
+    const C = DT.COUNTRIES[team.cc];
+    if (compName.includes('Libertadores')) A.unlock('lib');
+    else if (compName.includes('Sudamericana')) A.unlock('sud');
+    else if (compName.includes('Recopa')) A.unlock('rec');
+    else if (compName.includes('Intercontinental')) A.unlock('int');
+    else if (C && compName === C.cup) A.unlock('copa');
+    else if (C && compName === C.league) {
+      A.unlock('liga');
+      if (team.rep < 72) A.unlock('chico');
+    }
+    const mine = G.manager.titles.filter((x) => x.y === G.year).map((x) => x.c);
+    if (C && mine.includes(C.league) && mine.includes(C.cup)) A.unlock('doblete');
+  };
+
+  A.season = function (promoted) {
+    const G = DT.G;
+    if (promoted) A.unlock('ascenso');
+    const t = DT.userTeam();
+    if (t && t.squad.some((id) => G.players[id] && G.players[id].fromAcad && G.players[id].ovr >= 80)) A.unlock('joya');
+  };
+  A.job = function () {
+    const G = DT.G;
+    const cc = new Set(G.manager.clubs.map((c) => (G.teams[c.id] ? G.teams[c.id].cc : null)).filter(Boolean));
+    if (cc.size >= 3) A.unlock('trotamundos');
+  };
+
+  return A;
+})();
+
 // ---- src/game/save.js ----
 // Guardado compacto de la partida (jugadores y partidos como arrays).
 DT.Save = (function () {
@@ -4688,7 +5122,7 @@ DT.Save = (function () {
     const out = Object.assign({}, G);
     out.players = Object.values(G.players).map((p) => {
       const arr = PF.map((k) => (typeof p[k] === 'number' ? Math.round(p[k] * 100) / 100 : p[k]));
-      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0, (p.num || p.loan || p.sellOn || p.nt) ? { num: p.num, loan: p.loan, sellOn: p.sellOn, nt: p.nt } : 0);
+      arr.push([p.st.pj, p.st.g, p.st.a, Math.round(p.st.rs * 10) / 10], [p.car.pj, p.car.g], p.fm, (p.real ? 1 : 0) | (p.lst ? 2 : 0) | (p.yt ? 4 : 0) | (p.played ? 8 : 0), p.from || 0, (p.num || p.loan || p.sellOn || p.nt || p.acad || p.cl !== undefined || p.fromAcad) ? { num: p.num, loan: p.loan, sellOn: p.sellOn, nt: p.nt, acad: p.acad, cl: p.cl, fa: p.fromAcad } : 0);
       return arr;
     });
     const S = G.season;
@@ -4727,6 +5161,9 @@ DT.Save = (function () {
         if (ex.loan) p.loan = ex.loan;
         if (ex.sellOn) p.sellOn = ex.sellOn;
         if (ex.nt) p.nt = ex.nt;
+        if (ex.acad) p.acad = 1;
+        if (ex.cl !== undefined && ex.cl !== null) p.cl = ex.cl;
+        if (ex.fa) p.fromAcad = 1;
       }
       players[p.id] = p;
     }
@@ -4734,6 +5171,7 @@ DT.Save = (function () {
     for (const id in G.teams) G.teams[id].squad = [];
     for (const pid in players) {
       const p = players[pid];
+      if (p.acad) continue; // las inferiores se guardan en team.academy
       if (p.t && G.teams[p.t]) G.teams[p.t].squad.push(p.id);
       else p.t = null;
     }
@@ -4779,11 +5217,20 @@ DT.Save = (function () {
   Save.pack = async () => gz(Save.toJSON());
   Save.unpack = async (s) => Save.deserialize(JSON.parse(await gunz(s.trim())));
 
+  // Tres espacios de guardado en el dispositivo (el 1 usa la clave original).
+  Save.SLOTS = 3;
+  const keyOf = (n) => (n === 1 ? KEY : KEY + '_' + n);
+  Save.slot = 1;
+  try { Save.slot = Math.min(Save.SLOTS, Math.max(1, +(localStorage.getItem('dtsud_slot') || 1))); } catch (e) { /* sin almacenamiento */ }
+  Save.setSlot = function (n) {
+    Save.slot = n;
+    try { localStorage.setItem('dtsud_slot', String(n)); } catch (e) { /* sin almacenamiento */ }
+  };
   Save.local = async function () {
     try {
       const s = await Save.pack();
-      localStorage.setItem(KEY, s);
-      localStorage.setItem(KEY + '_meta', JSON.stringify(Save.meta()));
+      localStorage.setItem(keyOf(Save.slot), s);
+      localStorage.setItem(keyOf(Save.slot) + '_meta', JSON.stringify(Save.meta()));
       return true;
     } catch (e) {
       return false;
@@ -4792,20 +5239,26 @@ DT.Save = (function () {
   Save.meta = function () {
     const G = DT.G;
     const t = DT.userTeam();
-    return { team: t.n, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now(), retired: !!G.retired, fired: !!G.pendingOffers };
+    return { team: t.n, tid: t.id, year: G.year, week: G.week, mgr: G.manager.n, at: Date.now(), retired: !!G.retired, fired: !!G.pendingOffers, diff: G.settings.diff };
   };
-  Save.localMeta = function () {
-    try { return JSON.parse(localStorage.getItem(KEY + '_meta') || 'null'); } catch (e) { return null; }
+  Save.localMeta = function (n) {
+    try { return JSON.parse(localStorage.getItem(keyOf(n || Save.slot) + '_meta') || 'null'); } catch (e) { return null; }
   };
-  Save.loadLocal = async function () {
+  Save.allMeta = function () {
+    const out = [];
+    for (let n = 1; n <= Save.SLOTS; n++) out.push(Save.localMeta(n));
+    return out;
+  };
+  Save.loadLocal = async function (n) {
     let s = null;
-    try { s = localStorage.getItem(KEY); } catch (e) { s = null; }
+    try { s = localStorage.getItem(keyOf(n || Save.slot)); } catch (e) { s = null; }
     if (!s) return false;
     await Save.unpack(s);
+    if (n) Save.setSlot(n);
     return true;
   };
-  Save.clearLocal = function () {
-    try { localStorage.removeItem(KEY); localStorage.removeItem(KEY + '_meta'); } catch (e) { /* sin acceso */ }
+  Save.clearLocal = function (n) {
+    try { localStorage.removeItem(keyOf(n || Save.slot)); localStorage.removeItem(keyOf(n || Save.slot) + '_meta'); } catch (e) { /* sin acceso */ }
   };
 
   // Guardado en la nube (capability db del artifact), en partes de 200 KB.
@@ -4942,6 +5395,12 @@ DT.UI = (function () {
       return head + row(x);
     }).join('');
   };
+  // Barra de tensión de una negociación (0 a 100).
+  UI.tension = (v) => {
+    const t = Math.round(Math.max(0, Math.min(100, v || 0)));
+    const lbl = t >= 75 ? 'A punto de levantarse' : t >= 45 ? 'Tensa' : t > 0 ? 'Tranquila' : 'Sin tensión';
+    return `<div class="tension"><div class="row between tiny"><span class="up">Tensión</span><span style="color:${t >= 75 ? 'var(--loss)' : t >= 45 ? 'var(--warn)' : 'var(--muted)'};font-weight:700">${lbl}</span></div><div class="bar ${t >= 75 ? 'bad' : t >= 45 ? 'warn' : ''}"><i style="width:${t}%"></i></div></div>`;
+  };
   UI.formChips = (form) => form.slice(-5).map((r) => `<span class="res ${r}">${r}</span>`).join('');
   UI.dateLabel = () => {
     const G = DT.G;
@@ -4968,11 +5427,46 @@ DT.UI = (function () {
   };
   UI.A.closeModal = () => { UI.closeModal(); UI.showNotices(); };
 
+  // Logros recién desbloqueados: aviso breve.
+  UI.achToast = function () {
+    const G = DT.G;
+    if (!G || !G.achNew || !G.achNew.length) return;
+    const items = G.achNew.map((id) => DT.Ach.info(id)).filter(Boolean);
+    G.achNew = [];
+    if (items.length) UI.toast(`${items[0][1]} Logro desbloqueado: ${items.map((x) => x[2]).join(', ')}`, 4200);
+  };
+
   // Avisos que aparecen solos en pantalla (por ejemplo, juveniles que suben al plantel).
   UI.showNotices = function () {
     const G = DT.G;
     if (!G || !G.notices || !G.notices.length || !$('#modal').hidden) return;
     const n = G.notices.shift();
+    if (n.kind === 'offer') {
+      const o = DT.M.getOffer(n.oid);
+      const p = o && G.players[o.pid];
+      if (!o || o.st !== 'open' || !p || p.t !== G.user) { UI.showNotices(); return; }
+      UI.modal(`<span class="kicker">Mercado de pases</span><h2>Oferta por ${U.esc(p.n)}</h2>
+        <div class="small"><b>${U.esc(o.name)}</b> ofrece <b>${U.money(o.fee)}</b> por ${U.esc(p.n)} (${U.posName[p.pos]}, ${p.age} años, media ${p.ovr}). Valor estimado: ${U.money(DT.P.value(p))}.</div>
+        <div class="small muted">La oferta queda en Mercado → Mis ventas durante 2 semanas.</div>
+        <button class="btn primary block" data-a="offAccept" data-id="${o.id}">Aceptar ${U.money(o.fee)}</button>
+        <button class="btn gold block" data-a="offNeg" data-id="${o.id}">Negociar</button>
+        <button class="btn block" data-a="closeModal">Decidir después</button>`);
+      return;
+    }
+    if (n.kind === 'msg') {
+      UI.modal(`<h2>${U.esc(n.title)}</h2><div class="small">${U.esc(n.body)}</div><button class="btn primary block" data-a="closeModal">Entendido</button>`);
+      return;
+    }
+    if (n.kind === 'acad') {
+      const ps = (n.pids || []).map((id) => G.players[id]).filter((p) => p && p.acad).sort(UI.byPos);
+      UI.modal(`<span class="kicker">Inferiores</span><h2>${U.esc(n.title)}</h2>
+        <div class="small">${ps.length} chicos nuevos se suman a las inferiores. Subilos al primer equipo cuando estén listos desde Plantel → Inferiores.</div>
+        ${n.left && n.left.length ? `<div class="small muted">Se fueron libres por cumplir 22: ${n.left.map(U.esc).join(', ')}.</div>` : ''}
+        ${n.cut && n.cut.length ? `<div class="small muted">Quedaron afuera por cupo: ${n.cut.map(U.esc).join(', ')}.</div>` : ''}
+        <section class="card"><div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años</div></div>${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span></div>`).join('')}</div></section>
+        <button class="btn primary block" data-a="closeModal">Entendido</button>`);
+      return;
+    }
     if (n.kind === 'youth') {
       const ps = (n.pids || []).map((id) => G.players[id]).filter((p) => p && p.t === G.user).sort(UI.byPos);
       if (!ps.length) { UI.showNotices(); return; }
@@ -5044,6 +5538,7 @@ DT.UI = (function () {
     main.innerHTML = scr();
     UI.renderCTA();
     UI.showNotices();
+    UI.achToast();
   };
 
   UI.A.quickMatch = () => {
@@ -5132,6 +5627,8 @@ DT.Screens = (function () {
     if (pending.length) {
       parts.push(`<section class="card"><div class="row between"><h2>Decisiones pendientes</h2><span class="pill gold">${pending.length}</span></div>${pending.map(Sc.msg).join('')}</section>`);
     }
+    const offers = DT.M.openOffers();
+    if (offers.length) parts.push(`<section class="card"><div class="row between"><h3>Ofertas por tus jugadores</h3><span class="pill gold">${offers.length}</span></div>${offers.map(Sc.offerCard).join('')}</section>`);
     parts.push(Sc.nextMatchCard());
     // Directiva
     const M = G.manager;
@@ -5254,8 +5751,8 @@ DT.Screens = (function () {
   // ================= PLANTEL =================
   Sc.squad = function () {
     const v = UI.sub.squad;
-    const seg = `<div class="seg">${[['xi', 'Once'], ['tac', 'Táctica'], ['list', 'Plantel']].map(([k, l]) => `<button class="${v === k ? 'on' : ''}" data-a="sub" data-k="squad" data-v="${k}">${l}</button>`).join('')}</div>`;
-    return seg + (v === 'xi' ? Sc.xi() : v === 'tac' ? Sc.tactics() : Sc.squadList());
+    const seg = `<div class="seg">${[['xi', 'Once'], ['tac', 'Táctica'], ['list', 'Plantel'], ['acad', 'Inferiores']].map(([k, l]) => `<button class="${v === k ? 'on' : ''}" data-a="sub" data-k="squad" data-v="${k}">${l}</button>`).join('')}</div>`;
+    return seg + (v === 'xi' ? Sc.xi() : v === 'tac' ? Sc.tactics() : v === 'acad' ? Sc.academy() : Sc.squadList());
   };
 
   const shortN = (p) => {
@@ -5417,6 +5914,22 @@ DT.Screens = (function () {
       <section class="card"><div class="list">${sort === 'pos' ? UI.grouped(ps, rowOf) : ps.map(rowOf).join('')}</div></section>`;
   };
   A.squadSort = (d) => { UI.sub.squadSort = d.v; UI.render(); };
+
+  // ================= INFERIORES =================
+  Sc.academy = function () {
+    const t = DT.userTeam();
+    DT.Acad.ensure(t);
+    const ps = DT.Acad.list(t).sort((a, b) => 'PDMA'.indexOf(a.pos) - 'PDMA'.indexOf(b.pos) || b.pot - a.pot || b.ovr - a.ovr);
+    const lvl = t.infra.youth;
+    const row = (p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años ${p.age >= DT.Acad.MAX_AGE ? '<span class="pill warn">Último año</span>' : ''}</div></div>
+      ${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span><button class="btn sm primary" data-a="acadPromote" data-id="${p.id}" aria-label="Subir a ${U.esc(p.n)}">Subir</button></div>`;
+    return `<section class="card">
+        <div class="row between"><h2>Inferiores</h2><span class="pill">${ps.length}/${DT.Acad.SIZE}</span></div>
+        <div class="kv"><div><span>Nivel</span><b>${'★'.repeat(lvl)}<span style="opacity:.25">${'★'.repeat(5 - lvl)}</span></b></div><div><span>Edades</span><b>14 a 21</b></div><div><span>Mejor proyección</span><b>${ps.length ? Math.max(...ps.map((p) => p.ovr)) : '—'}</b></div></div>
+        <div class="small muted">Los chicos entrenan y mejoran solos. Solo suben al primer equipo cuando vos los ascendés. Al cumplir 22, si no los subiste, se van libres. Cada fin de temporada llega una camada nueva (mejor cuanto más nivel tengan las inferiores: se mejoran en Club → Estadio).</div>
+      </section>
+      <section class="card"><div class="list">${UI.grouped(ps, row) || '<div class="empty">No hay juveniles.</div>'}</div></section>`;
+  };
 
   // ================= TORNEOS =================
   Sc.comp = function () {
@@ -5640,12 +6153,78 @@ DT.Screens = (function () {
     const G = DT.G;
     const t = DT.userTeam();
     const listed = t.squad.map((id) => G.players[id]).filter((p) => p.lst);
-    const offers = G.inbox.filter((m) => m.kind === 'transfer' && m.actions && !m.done);
-    return `<section class="card"><h3>Ofertas recibidas</h3>${offers.map(Sc.msg).join('') || '<div class="small muted">No hay ofertas. Poné jugadores en venta para atraer compradores; las ofertas llegan con el libro de pases abierto.</div>'}</section>
+    const old = G.inbox.filter((m) => m.kind === 'transfer' && m.actions && !m.done);
+    const offers = DT.M.openOffers();
+    const sellOns = Object.values(G.players).filter((p) => p.sellOn && p.sellOn.tid === t.id);
+    return `<section class="card"><h3>Ofertas recibidas</h3>${offers.map(Sc.offerCard).join('')}${old.map(Sc.msg).join('')}${offers.length || old.length ? '' : '<div class="small muted">No hay ofertas. Poné jugadores en venta para atraer compradores; las ofertas llegan con el libro de pases abierto y vencen a las 2 semanas.</div>'}</section>
       <section class="card"><h3>Jugadores en venta</h3><div class="list">${listed.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">Valor ${U.money(DT.P.value(p))}</div></div><span class="ovr">${p.ovr}</span></div>`).join('') || '<div class="small muted">Ninguno. Abrí la ficha de un jugador y tocá "Poner en venta".</div>'}</div></section>
+      <section class="card"><h3>Porcentajes de futura venta</h3><div class="list">${sellOns.map((p) => `<div class="li" data-a="player" data-id="${p.id}"><div class="name">${U.esc(p.n)}<div class="sub">${p.t ? `En ${U.esc(G.teams[p.t].n)}` : 'Libre'} · valor ${U.money(DT.P.value(p))}</div></div><span class="pill ok">${Math.round(p.sellOn.pct * 100)}%</span></div>`).join('') || '<div class="small muted">Cuando vendas con porcentaje de futura venta, acá ves a quién seguir: si lo vuelven a vender, cobrás tu parte.</div>'}</div></section>
       <section class="card"><h3>Cedidos a préstamo</h3><div class="list">${Object.values(G.players).filter((p) => p.loan && p.loan.from === t.id).map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">En ${U.esc(G.teams[p.t].n)} · ${p.st.pj} PJ · ${p.st.g} goles</div></div><span class="ovr">${p.ovr}</span></div>`).join('') || '<div class="small muted">No tenés jugadores cedidos.</div>'}</div></section>
       <section class="card"><h3>Vendidos al exterior</h3><div class="list">${G.abroad.slice(0, 15).map((x) => `<div class="li"><div class="name">${U.esc(x.n)}<div class="sub">${U.esc(x.from || '')} → ${U.esc(x.club)} · ${x.y}</div></div><b class="tab-nums">${U.money(x.fee)}</b></div>`).join('') || '<div class="small muted">Todavía no hubo ventas al exterior.</div>'}</div></section>`;
   };
+  const clauseTxt = (p) => { const c = DT.M.clause(p); return c ? ` · cláusula ${U.money(c)}` : ''; };
+  Sc.offerCard = function (o) {
+    const p = DT.G.players[o.pid];
+    return `<div class="msg pending"><div class="row between"><b>${U.esc(o.name)} quiere a ${U.esc(p.n)}</b><span class="tiny muted">S${o.w}</span></div>
+      <div class="small">${U.posName[p.pos]} · ${p.age} años · media ${p.ovr} · valor ${U.money(DT.P.value(p))}${clauseTxt(p)}</div>
+      <div class="row between"><span class="small">Oferta actual</span><b class="tab-nums" style="font-size:1.1rem">${U.money(o.fee)}</b></div>
+      ${o.t ? UI.tension(o.t) : ''}
+      <div class="actions"><button class="btn sm primary" data-a="offAccept" data-id="${o.id}">Aceptar ${U.money(o.fee)}</button><button class="btn sm" data-a="offNeg" data-id="${o.id}">Negociar</button><button class="btn sm danger" data-a="offReject" data-id="${o.id}">Rechazar</button></div></div>`;
+  };
+  // Negociación de una oferta recibida
+  const SNEG = {};
+  A.offNeg = (d) => {
+    const o = DT.M.getOffer(+d.id);
+    if (!o || o.st !== 'open') { UI.toast('La oferta ya no está vigente.'); UI.render(); return; }
+    const p = DT.G.players[o.pid];
+    SNEG.oid = o.id;
+    SNEG.ask = U.round(Math.max(o.fee * 1.15, DT.P.value(p)), stepFor(o.fee));
+    SNEG.sellOn = false;
+    SNEG.msg = '';
+    renderSellNeg();
+  };
+  function renderSellNeg() {
+    const o = DT.M.getOffer(SNEG.oid);
+    const p = DT.G.players[o.pid];
+    const open = o.st === 'open';
+    UI.modal(`<span class="kicker">Negociación</span><h3>${U.esc(o.name)} por ${U.esc(p.n)}</h3>
+      <div class="small muted">Valor de mercado ${U.money(DT.P.value(p))}. Si pedís más de lo que están dispuestos a pagar, sube la tensión, y cuanto más te pasás, más rápido sube. Si llega al máximo, se retiran.</div>
+      <div class="row between"><span class="small">Su oferta</span><b class="tab-nums" style="font-size:1.25rem">${U.money(o.fee)}</b></div>
+      ${UI.tension(o.t)}
+      ${open ? `<span class="up">Tu pedido</span>
+      <div class="stepper"><button class="btn" data-a="snegAsk" data-v="-1">−</button><div class="val">${U.money(SNEG.ask)}</div><button class="btn" data-a="snegAsk" data-v="1">+</button></div>
+      <div class="row wrap">${[1.1, 1.25, 1.5].map((k) => `<button class="chip" data-a="snegSet" data-v="${k}">+${Math.round((k - 1) * 100)}% de su oferta</button>`).join('')}</div>
+      ${o.buyer ? `<label class="toggle small"><input type="checkbox" data-c="snegSellOn" ${SNEG.sellOn ? 'checked' : ''}> Pedir 20% de una futura venta (pagan algo menos ahora)</label>` : ''}` : ''}
+      ${SNEG.msg ? `<div class="msg pending small">${U.esc(SNEG.msg)}</div>` : ''}
+      ${o.log.length > 1 ? `<div class="tiny muted">Antes: ${o.log.slice(1, 4).map(U.esc).join(' · ')}</div>` : ''}
+      ${open ? `<button class="btn primary block" data-a="snegSend">Pedir ${U.money(SNEG.ask)}</button><button class="btn gold block" data-a="snegAccept">Aceptar ${U.money(o.fee)}${SNEG.sellOn && o.buyer ? ' + 20%' : ''}</button>` : '<button class="btn block" data-a="closeModal">Cerrar</button>'}`);
+  }
+  A.snegAsk = (d) => { SNEG.ask = Math.max(10000, SNEG.ask + (+d.v) * stepFor(SNEG.ask)); renderSellNeg(); };
+  A.snegSet = (d) => { const o = DT.M.getOffer(SNEG.oid); SNEG.ask = U.round(o.fee * +d.v, stepFor(o.fee)); renderSellNeg(); };
+  A.snegSellOn = (d, el) => { SNEG.sellOn = el.checked; renderSellNeg(); };
+  A.snegSend = () => {
+    const r = DT.M.offerCounter(SNEG.oid, SNEG.ask, SNEG.sellOn);
+    SNEG.msg = r.msg;
+    if (r.res === 'accept') {
+      const a = DT.M.offerAccept(SNEG.oid, SNEG.sellOn);
+      UI.closeModal();
+      UI.toast(a.msg, 4000);
+      if (a.ok) DT.Main.autosave();
+      UI.render();
+      return;
+    }
+    UI.render();
+    renderSellNeg();
+  };
+  A.snegAccept = () => A.offAccept({ id: SNEG.oid, sellOn: SNEG.sellOn ? '1' : '' });
+  A.offAccept = (d) => {
+    const r = DT.M.offerAccept(+d.id, d.sellOn === '1');
+    UI.closeModal();
+    UI.toast(r.msg, 4000);
+    if (r.ok) DT.Main.autosave();
+    UI.render();
+  };
+  A.offReject = (d) => { DT.M.offerReject(+d.id); UI.closeModal(); UI.toast('Rechazaste la oferta.'); UI.render(); };
 
   // ================= FICHA DE JUGADOR =================
   A.player = (d) => {
@@ -5659,7 +6238,12 @@ DT.Screens = (function () {
     const avg = DT.P.avgRating(p);
     let actions = '';
     const known = DT.M.known(p);
-    if (mine && p.loan) {
+    const cl = DT.M.clause(p);
+    if (p.acad && mine) {
+      actions = `<div class="small muted">Juega en las inferiores. ${p.age >= DT.Acad.MAX_AGE ? '<b style="color:var(--warn)">Es su último año: si no lo subís, a fin de temporada se va libre.</b>' : `Puede quedarse hasta los ${DT.Acad.MAX_AGE} años.`}</div>
+        <button class="btn primary block" data-a="acadPromote" data-id="${p.id}">Subir al primer equipo</button>
+        <button class="btn danger block" data-a="acadRelease" data-id="${p.id}">Dejarlo libre</button>`;
+    } else if (mine && p.loan) {
       actions = `<div class="small muted">Está a préstamo desde ${U.esc(G.teams[p.loan.from] ? G.teams[p.loan.from].n : 'otro club')} y vuelve a fin de temporada.</div><button class="btn block" data-a="editName" data-id="${p.id}">Editar nombre</button>`;
     } else if (mine) {
       actions = `<div class="grid2">
@@ -5671,6 +6255,7 @@ DT.Screens = (function () {
       </div>`;
     } else if (tm && !tm.eur) {
       actions = `<button class="btn primary block" data-a="buyOpen" data-id="${p.id}">Hacer una oferta</button>
+        ${cl ? `<button class="btn gold block" data-a="payClause" data-id="${p.id}">Pagar la cláusula (${U.money(cl)})</button>` : ''}
         <div class="grid2">
           <button class="btn" data-a="loanInOpen" data-id="${p.id}">Pedir a préstamo</button>
           <button class="btn" data-a="compare" data-id="${p.id}">Comparar</button>
@@ -5687,7 +6272,8 @@ DT.Screens = (function () {
         <div><span>Potencial</span><b>${UI.potOf(p)}</b></div>
         <div><span>Valor</span><b>${U.money(val)}</b></div>
         <div><span>Sueldo/año</span><b>${U.money(p.w)}</b></div>
-        <div><span>Contrato</span><b>${p.t ? `${p.cy} ${p.cy === 1 ? 'año' : 'años'}` : '—'}</b></div>
+        <div><span>Contrato</span><b>${p.acad ? 'Inferiores' : p.t ? `${p.cy} ${p.cy === 1 ? 'año' : 'años'}` : '—'}</b></div>
+        <div><span>Cláusula</span><b>${p.acad || !p.t ? '—' : cl ? U.money(cl) : 'No tiene'}</b></div>
         <div><span>Físico</span><b>${Math.round(p.fit)}%</b></div>
         <div><span>Moral</span><b>${Math.round(p.mor)}</b></div>
       </div>
@@ -5710,6 +6296,28 @@ DT.Screens = (function () {
       ${titles.length ? `<div class="small">Títulos recientes: ${titles.map((x) => `${U.esc(x.c)} ${x.y}`).join(' · ')}</div>` : ''}
       <div class="list">${UI.grouped(ps, (p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`)}</div>`);
   };
+
+  A.payClause = (d) => {
+    const p = DT.G.players[+d.id];
+    const me = DT.userTeam();
+    if (!p || !p.t || p.t === me.id) return;
+    const cl = DT.M.clause(p);
+    if (!DT.S.windowOpen()) { UI.toast('El libro de pases está cerrado. Abre en las semanas 0–4 y 21–26.'); return; }
+    if (cl > DT.M.budget(me)) { UI.toast(`No te alcanza: la directiva autoriza hasta ${U.money(DT.M.budget(me))}.`); return; }
+    contractStep(p.id, cl, `Vas a pagar la cláusula de ${U.money(cl)}: ${DT.team(p.t).n} no se puede negar. Ahora convencé al jugador.`, true);
+  };
+  A.acadPromote = (d) => {
+    const r = DT.Acad.promote(+d.id);
+    UI.closeModal();
+    UI.toast(r.msg);
+    DT.Main.autosave();
+    UI.render();
+  };
+  A.acadRelease = (d) => {
+    const p = DT.G.players[+d.id];
+    UI.modal(`<h3>¿Dejar libre a ${U.esc(p.n)}?</h3><div class="small">Se va de las inferiores y su lugar queda libre hasta la próxima camada.</div><button class="btn danger block" data-a="acadReleaseDo" data-id="${p.id}">Sí, dejarlo libre</button>`);
+  };
+  A.acadReleaseDo = (d) => { DT.Acad.release(+d.id); UI.closeModal(); UI.render(); };
 
   A.scout = (d) => {
     const r = DT.M.scout(+d.id);
@@ -5849,6 +6457,7 @@ DT.Screens = (function () {
       <div class="stepper"><button class="btn" data-a="negFee" data-v="-1">−</button><div class="val">${U.money(NEG.fee)}</div><button class="btn" data-a="negFee" data-v="1">+</button></div>
       <div class="row wrap">${[0.8, 1, 1.2, 1.5].map((k) => `<button class="chip" data-a="negFeeSet" data-v="${k}">${k === 1 ? 'Valor' : (k > 1 ? '+' : '') + Math.round((k - 1) * 100) + '%'}</button>`).join('')}</div>
       <div class="small muted">Presupuesto disponible: ${U.money(DT.M.budget(DT.userTeam()))}</div>
+      ${UI.tension(DT.M.buyTension(p.id).v)}
       ${NEG.msg ? `<div class="msg pending small">${U.esc(NEG.msg)}</div>` : ''}
       ${NEG.counter ? `<button class="btn gold block" data-a="negAcceptCounter">Aceptar ${U.money(NEG.counter)}</button>` : ''}
       <button class="btn primary block" data-a="negSend">Enviar oferta</button>`);
@@ -5869,9 +6478,11 @@ DT.Screens = (function () {
     contractStep(NEG.pid, NEG.counter, 'Acuerdo entre clubes. Ahora negociá con el jugador.');
   };
 
-  function contractStep(pid, fee, msg) {
+  function contractStep(pid, fee, msg, byClause) {
     const p = DT.G.players[pid];
     const d = DT.P.demand(p, DT.userTeam());
+    NEG.clause = 'mid';
+    NEG.byClause = !!byClause;
     NEG.pid = pid;
     NEG.fee = fee;
     NEG.wage = U.round(d.w * 0.9, 1000);
@@ -5885,7 +6496,7 @@ DT.Screens = (function () {
   A.renewOpen = (d) => {
     const p = DT.G.players[+d.id];
     const dm = DT.M.renewDemand(p);
-    NEG.pid = p.id; NEG.fee = 0; NEG.wage = U.round(Math.max(p.w, dm.w * 0.92), 1000); NEG.years = dm.years; NEG.mode = 'renew';
+    NEG.pid = p.id; NEG.fee = 0; NEG.wage = U.round(dm.cut ? dm.w * 0.95 : Math.max(p.w, dm.w * 0.92), 1000); NEG.years = dm.years; NEG.mode = 'renew'; NEG.clause = 'mid';
     NEG.msg = p.mor < 30 ? `${p.n} está disconforme y difícilmente quiera renovar.` : '';
     renderContract();
   };
@@ -5900,16 +6511,20 @@ DT.Screens = (function () {
       <div class="stepper"><button class="btn" data-a="negWage" data-v="-1">−</button><div class="val">${U.money(NEG.wage)}</div><button class="btn" data-a="negWage" data-v="1">+</button></div>
       <span class="up">Años de contrato</span>
       <div class="seg">${[1, 2, 3, 4, 5].map((y) => `<button class="${NEG.years === y ? 'on' : ''}" data-a="negYears" data-v="${y}">${y}</button>`).join('')}</div>
+      <span class="up">Cláusula de rescisión</span>
+      <div class="seg">${DT.M.CLAUSES.map((c) => `<button class="${NEG.clause === c.k ? 'on' : ''}" data-a="negClause" data-v="${c.k}">${c.label}</button>`).join('')}</div>
+      <div class="tiny muted">${NEG.clause === 'none' ? 'Sin cláusula nadie se lo puede llevar sin tu permiso, pero el jugador pide más sueldo.' : `Cualquier club puede pagar ${U.money(DT.M.clauseAmount(p, NEG.clause))} y llevárselo. Más baja = el jugador acepta cobrar menos.`}</div>
       ${NEG.msg ? `<div class="msg pending small">${U.esc(NEG.msg)}</div>` : ''}
       ${payroll + NEG.wage > DT.E.wageCap(me) ? `<button class="btn block" data-a="capRaise">Pedirle a la directiva más tope salarial</button>` : ''}
       <button class="btn primary block" data-a="negContract">Ofrecer contrato</button>`);
   }
   A.negWage = (d) => { NEG.wage = Math.max(12000, NEG.wage + (+d.v) * stepFor(NEG.wage) / 2); renderContract(); };
   A.negYears = (d) => { NEG.years = +d.v; renderContract(); };
+  A.negClause = (d) => { NEG.clause = d.v; renderContract(); };
   A.negContract = () => {
     const p = DT.G.players[NEG.pid];
     if (NEG.mode === 'renew') {
-      const r = DT.M.renew(NEG.pid, NEG.wage, NEG.years);
+      const r = DT.M.renew(NEG.pid, NEG.wage, NEG.years, NEG.clause);
       if (r.res === 'accept') { UI.closeModal(); UI.toast(`${p.n} renovó por ${NEG.years} ${NEG.years === 1 ? 'año' : 'años'}.`); DT.Main.autosave(); UI.render(); return; }
       NEG.msg = r.msg;
       renderContract();
@@ -5918,9 +6533,9 @@ DT.Screens = (function () {
     const me = DT.userTeam();
     if (me.squad.length >= 34) { NEG.msg = 'El plantel está lleno (34 jugadores). Vendé o rescindí antes.'; renderContract(); return; }
     if (NEG.fee && NEG.fee > DT.M.budget(me)) { NEG.msg = 'Ya no tenés presupuesto para pagar la transferencia.'; renderContract(); return; }
-    const r = DT.M.contractTalk(NEG.pid, NEG.wage, NEG.years);
+    const r = DT.M.contractTalk(NEG.pid, NEG.wage, NEG.years, NEG.clause);
     if (r.res === 'accept') {
-      DT.M.completeSigning(NEG.pid, NEG.fee, NEG.wage, NEG.years);
+      DT.M.completeSigning(NEG.pid, NEG.fee, NEG.wage, NEG.years, NEG.clause, NEG.byClause);
       UI.closeModal();
       UI.toast(`¡${p.n} es nuevo jugador del club!`);
       DT.Main.autosave();
@@ -6087,7 +6702,50 @@ DT.Screens = (function () {
     UI.toast(`Nuevo desafío: ${DT.userTeam().n}.`);
   };
 
+  // Historial: temporadas, récords del club y logros.
   Sc.history = function () {
+    const v = UI.sub.hist || 'seasons';
+    const seg = `<div class="seg">${[['seasons', 'Temporadas'], ['rec', 'Récords'], ['ach', 'Logros']].map(([k, l]) => `<button class="${v === k ? 'on' : ''}" data-a="sub" data-k="hist" data-v="${k}">${l}</button>`).join('')}</div>`;
+    return seg + (v === 'rec' ? Sc.records() : v === 'ach' ? Sc.achievements() : Sc.seasons());
+  };
+
+  Sc.records = function () {
+    const G = DT.G;
+    const t = DT.userTeam();
+    const r = DT.Rec.of(t.id);
+    const [pj, g, e, p, gf, gc] = r.games;
+    const pl = Object.values(r.pl);
+    const top = (k, n) => pl.filter((x) => x[k] > 0).sort((a, b) => b[k] - a[k]).slice(0, n || 10);
+    const list = (rows, k, unit) => (rows.length ? `<div class="list">${rows.map((x, i) => `<div class="li"><span class="muted tab-nums" style="width:20px">${i + 1}</span><div class="name">${U.esc(x[0])}</div><b class="tab-nums">${x[k]} ${unit}</b></div>`).join('')}</div>` : '<div class="small muted">Todavía sin datos.</div>');
+    const score = (x) => (x ? `<b>${x[0]}-${x[1]}</b> vs ${U.esc(x[2])} <span class="muted">(${U.esc(x[4])}, ${x[3]})</span>` : '—');
+    const h2h = Object.values(r.h2h).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    return `<section class="card"><span class="up">${U.esc(t.n)} · desde ${r.since}</span>
+        <div class="kv"><div><span>Partidos</span><b>${pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${g}-${e}-${p}</b></div><div><span>Goles</span><b class="tab-nums" style="font-size:1rem">${gf}-${gc}</b></div></div>
+        <div class="stack small">
+          <div class="row between"><span class="muted">Mayor goleada</span><span>${score(r.bigW)}</span></div>
+          <div class="row between"><span class="muted">Peor derrota</span><span>${score(r.bigL)}</span></div>
+          <div class="row between"><span class="muted">Racha invicta</span><b>${r.unb[1]} partidos${r.unb[0] ? ` <span class="muted" style="font-weight:400">(actual ${r.unb[0]})</span>` : ''}</b></div>
+          <div class="row between"><span class="muted">Victorias seguidas</span><b>${r.wins[1]}</b></div>
+          <div class="row between"><span class="muted">Goleador en una temporada</span><span>${r.seasonG ? `<b>${U.esc(r.seasonG[0])}</b> ${r.seasonG[1]} goles (${r.seasonG[2]})` : '—'}</span></div>
+          <div class="row between"><span class="muted">Mejor campaña</span><span>${r.bestPos ? `<b>${r.bestPos[0]}º</b> en ${U.esc(r.bestPos[3] || '')} (${r.bestPos[1]})` : '—'}</span></div>
+          <div class="row between"><span class="muted">Récord de público</span><span>${r.att ? `<b>${U.num(r.att[0])}</b> vs ${U.esc(r.att[1])} (${r.att[2]})` : '—'}</span></div>
+        </div></section>
+      <section class="card"><h3>Máximos goleadores</h3>${list(top(2), 2, 'goles')}</section>
+      <section class="card"><h3>Más partidos</h3>${list(top(1), 1, 'PJ')}</section>
+      <section class="card"><h3>Más asistencias</h3>${list(top(3, 5), 3, 'asist.')}</section>
+      <section class="card"><h3>Historial contra rivales</h3>${h2h.length ? `<div class="tablewrap"><table><thead><tr><th>#</th><th>Rival</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th></tr></thead><tbody>${h2h.map((x, i) => `<tr><td>${i + 1}</td><td class="team">${U.esc(x[0])}</td><td>${x[1]}</td><td>${x[2]}</td><td>${x[3]}</td><td>${x[4]}</td><td>${x[5]}</td><td>${x[6]}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Todavía sin partidos.</div>'}</section>
+      <section class="card flat small muted">Los récords cuentan los partidos con vos como DT de ${U.esc(t.n)}.</section>`;
+  };
+
+  Sc.achievements = function () {
+    const G = DT.G;
+    const got = G.ach || {};
+    const n = DT.Ach.LIST.filter((x) => got[x[0]]).length;
+    return `<section class="card"><div class="row between"><h2>Logros</h2><span class="pill gold">${n}/${DT.Ach.LIST.length}</span></div><div class="bar"><i style="width:${(n / DT.Ach.LIST.length) * 100}%;background:var(--gold)"></i></div></section>
+      <section class="card"><div class="achs">${DT.Ach.LIST.map(([id, ic, ti, de]) => `<div class="ach ${got[id] ? 'on' : ''}"><span class="ic">${got[id] ? ic : '🔒'}</span><div class="grow"><b>${U.esc(ti)}</b><div class="tiny muted">${U.esc(de)}${got[id] ? ` · ${got[id][0]}` : ''}</div></div></div>`).join('')}</div></section>`;
+  };
+
+  Sc.seasons = function () {
     const G = DT.G;
     const t = DT.userTeam();
     const names = { LIB: 'Libertadores', SUD: 'Sudamericana', REC: 'Recopa', INT: 'Intercontinental' };
@@ -6123,12 +6781,15 @@ DT.Screens = (function () {
       </section>
       <section class="card"><h3>Partidos</h3>
         <span class="up">Velocidad del partido en vivo</span>
-        <div class="seg">${[[1, 'Lenta'], [2, 'Normal'], [4, 'Rápida']].map(([v, l]) => `<button class="${G.settings.speed === v ? 'on' : ''}" data-a="setSpeed" data-v="${v}">${l}</button>`).join('')}</div>
+        <div class="seg">${[[1, 'x1'], [2, 'x2'], [4, 'x4']].map(([v, l]) => `<button class="${G.settings.speed === v ? 'on' : ''}" data-a="setSpeed" data-v="${v}">${l}</button>`).join('')}</div>
+        <span class="up">Cámara del partido</span>
+        <div class="seg">${[['tv', 'Cámara TV (sigue la jugada)'], ['full', 'Cancha entera']].map(([v, l]) => `<button class="${(G.settings.cam || 'tv') === v ? 'on' : ''}" data-a="setCam" data-v="${v}">${l}</button>`).join('')}</div>
       </section>
-      <section class="card"><h3>Nueva partida</h3><div class="small muted">Empezar de cero con otro club. Se pierde la partida actual (exportala antes si querés conservarla).</div><button class="btn danger block" data-a="newGameAsk">Empezar una nueva partida</button></section>
+      <section class="card"><h3>Otras carreras</h3><div class="small muted">Podés tener hasta 3 carreras guardadas. Esta está en el espacio ${DT.Save.slot}.</div><button class="btn block" data-a="newGameAsk">Volver al inicio</button></section>
       <section class="card flat small muted">Planteles aproximados a la temporada 2025/26. Los clubes con pocos datos completan su plantel con jugadores generados. Podés corregir cualquier nombre desde la ficha del jugador.</section>`;
   };
   A.setSpeed = (d) => { DT.G.settings.speed = +d.v; UI.render(); };
+  A.setCam = (d) => { DT.G.settings.cam = d.v; UI.render(); };
   A.saveNow = async () => {
     const ok = await DT.Main.autosave(true);
     UI.toast(ok ? 'Partida guardada.' : 'No se pudo guardar en este dispositivo. Exportá la partida para no perderla.');
@@ -6179,12 +6840,12 @@ DT.Screens = (function () {
     }
   };
   A.newGameAsk = () => {
-    UI.modal(`<h3>¿Empezar de cero?</h3><div class="small">Se borra la partida guardada en este dispositivo.</div><button class="btn danger block" data-a="newGameDo">Sí, nueva partida</button>`);
+    UI.modal(`<h3>Volver al inicio</h3><div class="small">Tu carrera actual queda guardada en el espacio ${DT.Save.slot}. En el inicio podés seguir otra carrera o empezar una nueva en cualquiera de los 3 espacios.</div><button class="btn primary block" data-a="newGameDo">Guardar y volver al inicio</button>`);
   };
-  A.newGameDo = () => {
-    DT.Save.clearLocal();
+  A.newGameDo = async () => {
+    await DT.Main.autosave(true);
     UI.closeModal();
-    DT.Main.showStart(true);
+    DT.Main.showStart(false);
   };
 })();
 
@@ -6246,7 +6907,102 @@ DT.Sound = (function () {
     src.connect(f).connect(g).connect(c.destination);
     src.start(t);
   };
-  S.card = () => { if (on()) tone(1800, 0, 0.12, 0.08, 'square'); };
+  // Pitazo corto (faltas y tarjetas)
+  S.card = () => { if (!on()) return; tone(2900, 0, 0.16, 0.1, 'square'); tone(3150, 0, 0.16, 0.04, 'sine'); };
+  S.whistleShort = S.card;
+  function noise(len) {
+    const c = ctx();
+    const buf = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * len)), c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    return src;
+  }
+  // Patada: golpe grave + chasquido (más fuerte en los remates)
+  S.kick = (power) => {
+    if (!on()) return;
+    const c = ctx();
+    if (!c) return;
+    const t = c.currentTime, v = 0.05 + 0.16 * (power || 0.4);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.09);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.connect(g).connect(c.destination);
+    o.start(t); o.stop(t + 0.14);
+    const n = noise(0.03), f = c.createBiquadFilter(), g2 = c.createGain();
+    f.type = 'highpass'; f.frequency.value = 1800;
+    g2.gain.setValueAtTime(v * 0.35, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    n.connect(f).connect(g2).connect(c.destination);
+    n.start(t);
+  };
+  // "¡Uhhh!" de la tribuna en una atajada o un remate que se va cerca
+  S.oh = () => {
+    if (!on()) return;
+    const c = ctx();
+    if (!c) return;
+    const t = c.currentTime;
+    const n = noise(1.1), f = c.createBiquadFilter(), g = c.createGain();
+    f.type = 'bandpass'; f.Q.value = 1.2;
+    f.frequency.setValueAtTime(700, t);
+    f.frequency.linearRampToValueAtTime(320, t + 1);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.22, t + 0.15);
+    g.gain.linearRampToValueAtTime(0, t + 1.05);
+    n.connect(f).connect(g).connect(c.destination);
+    n.start(t);
+  };
+  // Red: la pelota se mete en el arco
+  S.net = () => {
+    if (!on()) return;
+    const c = ctx();
+    if (!c) return;
+    const t = c.currentTime;
+    const n = noise(0.3), f = c.createBiquadFilter(), g = c.createGain();
+    f.type = 'highpass'; f.frequency.value = 2500;
+    g.gain.setValueAtTime(0.09, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    n.connect(f).connect(g).connect(c.destination);
+    n.start(t);
+  };
+  // Murmullo de la tribuna: sube cuando la pelota se acerca a un arco
+  S.crowdStart = () => {
+    if (!on() || S.crowd) return;
+    const c = ctx();
+    if (!c) return;
+    const len = 4;
+    const buf = c.createBuffer(1, c.sampleRate * len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < d.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    const src = c.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 900;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, c.currentTime);
+    g.gain.linearRampToValueAtTime(0.05, c.currentTime + 0.8);
+    src.connect(f).connect(g).connect(c.destination);
+    src.start();
+    S.crowd = { src, g };
+  };
+  S.crowdLevel = (v) => {
+    const c = S.ctx;
+    if (!S.crowd || !c) return;
+    S.crowd.g.gain.setTargetAtTime(0.04 + 0.1 * v, c.currentTime, 0.35);
+  };
+  S.crowdStop = () => {
+    const c = S.ctx;
+    if (!S.crowd || !c) return;
+    const cr = S.crowd;
+    S.crowd = null;
+    cr.g.gain.setTargetAtTime(0, c.currentTime, 0.2);
+    setTimeout(() => { try { cr.src.stop(); } catch (e) { /* ya detenido */ } }, 900);
+  };
   return S;
 })();
 
@@ -6273,6 +7029,10 @@ DT.Pitch = function (canvas, sim, hooks) {
   const trails = [];
   const marks = [];
   let overlay = null, caption = null;
+  // cámara de TV: sigue la jugada con zoom; "full" muestra la cancha entera
+  const camMode = () => (G.settings.cam === 'full' ? 'full' : 'tv');
+  const cam = { x: L / 2, y: Wd / 2 };
+  let crowdT = 0;
   const css = getComputedStyle(document.documentElement);
   const grassA = css.getPropertyValue('--pitch-a').trim() || '#2f7d4f';
   const grassB = css.getPropertyValue('--pitch-b').trim() || '#2a7247';
@@ -6294,6 +7054,9 @@ DT.Pitch = function (canvas, sim, hooks) {
 
   DT.P.ensureNumbers(th);
   DT.P.ensureNumbers(ta);
+  // carteles de publicidad del estadio local
+  const homeSponsor = th.sponsor && th.sponsor.name && th.sponsor.name !== 'Sponsor' ? th.sponsor.name : DT.E.SPONSORS[th.n.length % DT.E.SPONSORS.length];
+  const BOARDS = [homeSponsor, 'DT Sudamericano', DT.COUNTRIES[th.cc] ? DT.COUNTRIES[th.cc].cup : 'Copa', homeSponsor, th.n];
 
   // Coordenadas "propias": distancia al arco que defiende cada equipo (el local ataca hacia la derecha).
   const dirOf = (s) => (s === 0 ? 1 : -1);
@@ -6386,6 +7149,8 @@ DT.Pitch = function (canvas, sim, hooks) {
     const a = lst.att;
     const plan = [];
     roles = {};
+    // la pelota quedó afuera: se reanuda (lateral, saque) antes de seguir
+    if (!ball.fly && (ball.x < 0 || ball.x > L || ball.y < 0 || ball.y > Wd)) plan.push({ k: 'restart', s: a, w: 0.6 });
     const ownerSide = ball.owner && pl[ball.owner] ? pl[ball.owner].side : -1;
     if (ownerSide !== a) plan.push({ k: 'win', s: a, w: 0.7 });
     if (lst.shot) {
@@ -6408,27 +7173,36 @@ DT.Pitch = function (canvas, sim, hooks) {
       surge = -1;
       const n = budget > 1300 ? U.ri(2, 4) : budget > 650 ? U.ri(1, 3) : U.ri(1, 2);
       for (let i = 0; i < n; i++) plan.push(Math.random() < 0.72 ? { k: 'pass', s: a, w: 1 } : { k: 'carry', s: a, w: 0.8 });
-      if (Math.random() < 0.3) plan.push({ k: 'lose', s: a, w: 1 });
-      else plan.push({ k: 'idle', w: 0.3 });
+      const r = Math.random();
+      if (r < 0.24) plan.push({ k: 'lose', s: a, w: 1 });
+      else if (r < 0.4) plan.push({ k: 'out', s: a, w: 0.9 });
+      else plan.push({ k: 'idle', s: a, w: 0.6 });
     }
     const tot = plan.reduce((t, x) => t + x.w, 0);
     for (const x of plan) x.dur = (budget * x.w) / tot;
     queue = plan;
     act = null;
-    for (const c of lst.cards) {
-      marks.push({ pid: c.pid, red: c.red, until: now + Math.max(1800, tickMs * 2) });
-      say(`${c.red ? 'Roja' : 'Amarilla'} para ${short(c.pid)}`);
-      DT.Sound.card();
+    // tarjetas: la jugada arranca con la falta y el tiro libre
+    const c0 = lst.cards[0];
+    if (c0) {
+      const fk = 1 - c0.side;
+      const rest = plan.filter((x) => x.k !== 'win' && x.k !== 'restart');
+      queue = [{ k: 'foul', s: fk, cards: lst.cards, dur: budget * 0.35 }].concat(fk !== a ? [{ k: 'win', s: a, dur: budget * 0.12 }] : [], rest.map((x) => Object.assign(x, { dur: x.dur * 0.55 })));
+    } else {
+      for (const c of lst.cards) {
+        marks.push({ pid: c.pid, red: c.red, until: now + Math.max(1800, tickMs * 2) });
+        DT.Sound.card();
+      }
     }
   }
 
   // receptor de un pase: compañero bien ubicado, en lo posible más adelante
-  function pickReceiver(s, from) {
+  function pickReceiver(s, from, back) {
     const F = pl[from];
     const d = dirOf(s);
     const cands = ids(s, true).filter((id) => id !== from);
     if (!cands.length) return null;
-    const want = U.rf(2, 16);
+    const want = back ? U.rf(-12, 2) : U.rf(2, 16);
     const ws = cands.map((id) => {
       const P = pl[id];
       const adv = (P.x - F.x) * d;
@@ -6441,10 +7215,13 @@ DT.Pitch = function (canvas, sim, hooks) {
     return U.weighted(cands, ws);
   }
 
-  function launch(tx, ty, dur, kind, onEnd) {
+  function launch(tx, ty, dur, kind, onEnd, opts) {
     const d = Math.hypot(tx - ball.x, ty - ball.y);
-    ball.fly = { fx: ball.x, fy: ball.y, tx, ty, t0: performance.now(), dur: Math.max(60, dur), h: kind === 'pass' && d > 26 ? Math.min(4, d / 10) : kind === 'shot' ? 0.8 : 0, kind, onEnd };
+    const h = opts && opts.h !== undefined ? opts.h : kind === 'pass' && d > 26 ? Math.min(4, d / 10) : kind === 'shot' ? 0.8 : 0;
+    ball.fly = { fx: ball.x, fy: ball.y, tx, ty, t0: performance.now(), dur: Math.max(60, dur), h, kind, onEnd, to: opts && opts.to };
     ball.owner = null;
+    if (kind === 'shot') DT.Sound.kick(1);
+    else if (kind !== 'win') DT.Sound.kick(d > 26 ? 0.6 : 0.3);
     if (kind !== 'win') {
       trails.push({ x1: ball.x, y1: ball.y, x2: tx, y2: ty, t: performance.now(), kind });
       if (trails.length > 8) trails.shift();
@@ -6460,13 +7237,50 @@ DT.Pitch = function (canvas, sim, hooks) {
     }
     a.t0 = now;
     act = a;
-    if (a.k === 'idle') return;
     let own0 = ball.owner && pl[ball.owner] ? ball.owner : null;
+    if (a.k === 'idle') {
+      // tiempo libre: el equipo hace circular la pelota hacia atrás o al costado
+      if (own0 && a.dur > 220 && mode === 'play') {
+        const to = pickReceiver(pl[own0].side, own0, true);
+        if (to) launch(pl[to].x, pl[to].y, Math.min(a.dur * 0.8, 900), 'pass', () => { ball.owner = to; }, { to });
+      }
+      return;
+    }
+    if (a.k === 'restart') {
+      // reanudación: lateral o saque desde donde salió la pelota
+      const bx = U.clamp(ball.x, 1, L - 1), by = U.clamp(ball.y, 0.4, Wd - 0.4);
+      ball.x = bx; ball.y = by; ball.z = 0;
+      const tk = nearest(a.s, bx, by, true);
+      if (tk) { pl[tk].x = bx - dirOf(a.s) * 0.6; pl[tk].y = by; ball.owner = tk; poss = a.s; }
+      return;
+    }
+    if (a.k === 'foul') {
+      // falta: pitazo, tarjeta y tiro libre para el equipo que la recibió
+      const c0 = a.cards[0];
+      const fouler = c0.pid;
+      const fk = a.s;
+      DT.Sound.whistleShort();
+      for (const c of a.cards) marks.push({ pid: c.pid, red: c.red, until: now + Math.max(2000, tickMs * 2.2) });
+      say(`Falta de ${short(fouler)}: ${c0.red ? '¡roja!' : 'amarilla'}`, Math.max(1300, tickMs * 1.6));
+      const victim = own0 && pl[own0].side === fk ? own0 : nearest(fk, ball.x, ball.y, true);
+      if (victim) { ball.owner = victim; poss = fk; }
+      if (pl[fouler]) roles[fouler] = { x: ball.x - dirOf(fk) * 3, y: ball.y + 2, v: 0.6 };
+      // barrera si la falta es cerca del arco
+      if (own(fk, ball.x) > 68) {
+        const gx = fromOwn(fk, L), gy = Wd / 2;
+        const ang = Math.atan2(gy - ball.y, gx - ball.x);
+        const wx = ball.x + Math.cos(ang) * 9.15, wy = ball.y + Math.sin(ang) * 9.15;
+        ids(1 - fk, true).map((id) => [id, Math.hypot(pl[id].x - wx, pl[id].y - wy)]).sort((p, q) => p[1] - q[1]).slice(0, 3)
+          .forEach(([id], i) => { roles[id] = { x: wx - Math.sin(ang) * (i - 1) * 0.9, y: wy + Math.cos(ang) * (i - 1) * 0.9, v: 1.4 }; });
+        say(`Tiro libre peligroso. Falta de ${short(fouler)}`, Math.max(1300, tickMs * 1.6));
+      }
+      return;
+    }
     if (a.k === 'win') {
       const w = (own0 && pl[own0].side === a.s) ? own0 : nearest(a.s, ball.x, ball.y, own(a.s, ball.x) > 16);
       if (!w) return;
       poss = a.s;
-      if (own0 && pl[own0].side !== a.s) say(`Recupera ${short(w)}`);
+      if (own0 && pl[own0].side !== a.s && Math.random() < 0.35) say(`Recupera ${short(w)}`);
       const P = pl[w];
       launch(P.x, P.y, a.dur * 0.7, 'win', () => { ball.owner = w; });
       return;
@@ -6508,6 +7322,76 @@ DT.Pitch = function (canvas, sim, hooks) {
       launch(dest.x, dest.y, a.dur * 0.8, 'pass', () => { ball.owner = to; });
       return;
     }
+    if (a.k === 'out') {
+      // pase que se va por el costado: lateral para el rival
+      const edge = O.y < Wd / 2 ? -0.8 : Wd + 0.8;
+      const tx = U.clamp(O.x + d * U.rf(4, 14), 2, L - 2);
+      const ts = 1 - O.side;
+      launch(tx, edge, a.dur * 0.55, 'pass', () => {
+        say('Lateral');
+        poss = ts;
+        const thr = nearest(ts, tx, edge, true);
+        if (thr) {
+          roles[thr] = { x: tx, y: U.clamp(edge, 0.2, Wd - 0.2), v: 1.6 };
+          queue.unshift({ k: 'throw', s: ts, thr, x: tx, y: U.clamp(edge, 0.2, Wd - 0.2), dur: Math.max(250, tickMs * 0.3), tries: 0 });
+        }
+      });
+      return;
+    }
+    if (a.k === 'throw') {
+      const T = pl[a.thr];
+      if (!T) return;
+      if (Math.hypot(T.x - a.x, T.y - a.y) > 1.5 && a.tries < 4) {
+        a.tries++;
+        queue.unshift(a);
+        act = { k: 'wait', t0: now, dur: 160 };
+        return;
+      }
+      ball.x = a.x; ball.y = a.y; ball.z = 1.8;
+      delete roles[a.thr];
+      const to = nearest(a.s, a.x, Wd / 2 * 0.3 + a.y * 0.7, true, a.thr);
+      if (to) launch(pl[to].x, pl[to].y, a.dur * 0.8, 'pass', () => { ball.owner = to; }, { h: 1.6, to });
+      return;
+    }
+    if (a.k === 'cornerSetup') {
+      // córner: la pelota al banderín, el pateador va y todos se acomodan en el área
+      const sAtt = a.s, def = 1 - sAtt;
+      const fx = fromOwn(sAtt, L - 0.3), fy = a.top ? 0.3 : Wd - 0.3;
+      ball.fly = null; ball.x = fx; ball.y = fy; ball.z = 0; ball.owner = null;
+      const atts = ids(sAtt, true).sort((p, q) => own(sAtt, pl[q].x) - own(sAtt, pl[p].x));
+      const taker = nearest(sAtt, fx, fy, true);
+      roles = {};
+      if (taker) roles[taker] = { x: fx - dirOf(sAtt) * 0.5, y: fy + (a.top ? 0.5 : -0.5), v: 2 };
+      const spots = [[94, -4], [96, 3], [92, 7], [99, -1], [88, 0]];
+      atts.filter((id) => id !== taker).slice(0, 5).forEach((id, i) => { roles[id] = { x: fromOwn(sAtt, spots[i][0]), y: Wd / 2 + spots[i][1], v: 1.6 }; });
+      ids(def, true).sort((p, q) => own(def, pl[p].x) - own(def, pl[q].x)).slice(0, 6)
+        .forEach((id, i) => { roles[id] = { x: fromOwn(def, U.rf(4, 10)), y: Wd / 2 + (i - 2.5) * 3.2, v: 1.6 }; });
+      a.taker = taker;
+      queue.unshift({ k: 'cross', s: sAtt, taker, fx, fy, dur: a.cross });
+      return;
+    }
+    if (a.k === 'cross') {
+      const sAtt = a.s, def = 1 - sAtt;
+      ball.x = a.fx; ball.y = a.fy;
+      const tx = fromOwn(sAtt, L - U.rf(6, 11)), ty = Wd / 2 + U.rf(-6, 6);
+      const gk = gkOf(def);
+      say(`Centro de ${short(a.taker)}`);
+      launch(tx, ty, a.dur * 0.9, 'pass', () => {
+        if (gk && Math.random() < 0.45) {
+          ball.owner = gk; poss = def; say(`La embolsa ${short(gk)}`);
+        } else {
+          const clr = nearest(def, tx, ty, true);
+          if (clr) {
+            say(`Despeja ${short(clr)}`);
+            ball.x = pl[clr].x; ball.y = pl[clr].y;
+            const ex = fromOwn(sAtt, U.rf(52, 68)), ey = U.rf(10, Wd - 10);
+            launch(ex, ey, Math.max(300, tickMs * 0.45), 'lost', () => { const w = nearest(def, ex, ey, true); ball.owner = w; poss = def; }, { h: 3 });
+          }
+        }
+        roles = {};
+      }, { h: 5 });
+      return;
+    }
     if (a.k === 'carry') {
       const u = own(O.side, O.x);
       const nu = Math.min(L - 14, u + U.rf(5, 12));
@@ -6534,19 +7418,36 @@ DT.Pitch = function (canvas, sim, hooks) {
         const gy = Wd / 2 + U.rf(-3, 3);
         if (gk) roles[gk] = { x: fromOwn(def, 1), y: Wd / 2 - Math.sign(gy - Wd / 2 || 1) * 2.5, dive: true };
         const scorer = own0;
-        launch(gx + d * 1.6, gy, a.dur * 0.75, 'shot', () => { shotUntil = 0; goal(scorer, s); });
+        launch(gx + d * 1.6, gy, a.dur * 0.75, 'shot', () => { shotUntil = 0; DT.Sound.net(); goal(scorer, s); });
       } else if (a.res === 'save') {
         const gy = Wd / 2 + U.rf(-2.8, 2.8);
         const sx = fromOwn(def, 1.3);
         if (gk) roles[gk] = { x: sx, y: gy, dive: true };
+        const corner = Math.random() < 0.4;
         launch(sx, gy, a.dur * 0.75, 'shot', () => {
-          shotUntil = 0;
-          if (gk && pl[gk]) { ball.owner = gk; poss = def; say(`¡Ataja ${short(gk)}!`); }
+          DT.Sound.oh();
+          if (!corner) {
+            shotUntil = 0;
+            if (gk && pl[gk]) { ball.owner = gk; poss = def; say(`¡Ataja ${short(gk)}!`); }
+            return;
+          }
+          // la manda al córner: la jugada sigue con el centro (el reloj espera)
+          const top = gy < Wd / 2;
+          say(`¡Atajada de ${short(gk)}! Córner`, Math.max(1200, tickMs * 1.4));
+          const sl = Math.max(0.5, Math.pow(pace(), -0.6));
+          const setup = 1100 * sl, cross = 700 * sl;
+          shotUntil = performance.now() + 300 * sl + setup + cross + 1400 * sl;
+          launch(fromOwn(s, L + 1.5), top ? -0.5 : Wd + 0.5, 300 * sl, 'lost', () => {
+            queue = [{ k: 'cornerSetup', s, top, dur: setup, cross }];
+            act = null;
+            setTimeout(() => { shotUntil = 0; }, setup + cross + 1400 * sl);
+          });
         });
       } else {
         const gy = Wd / 2 + (Math.random() < 0.5 ? -1 : 1) * U.rf(4.6, 10);
         launch(gx + d * 2.6, gy, a.dur * 0.75, 'shot', () => {
           shotUntil = 0;
+          DT.Sound.oh();
           say('Afuera. Saque de arco.');
           // saque de arco: la pelota vuelve al área chica del que defiende
           setTimeout(() => {
@@ -6671,23 +7572,60 @@ DT.Pitch = function (canvas, sim, hooks) {
     }
   }
 
+  // En modo TV la cancha es más alta en el celular para que los jugadores se vean grandes.
+  const ratio = () => (camMode() === 'tv' ? ((canvas.clientWidth || 340) < 700 ? 0.82 : 0.6) : TH / TW);
   function resize() {
     const dpr = window.devicePixelRatio || 1;
+    canvas.style.aspectRatio = String(1 / ratio());
     const w = canvas.clientWidth || 340;
     canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round((w * TH / TW) * dpr);
+    canvas.height = Math.round(w * ratio() * dpr);
     scale = canvas.width / TW;
+  }
+  // Ventana visible en metros: con cámara de TV se ve un pedazo de la cancha alrededor de la pelota.
+  function view() {
+    if (camMode() !== 'tv') return { x0: -M, y0: -M, S: scale, w: TW, h: canvas.height / scale };
+    const visW = (canvas.clientWidth || 340) < 700 ? 50 : 78;
+    const S = canvas.width / visW;
+    const visH = canvas.height / S;
+    const x0 = U.clamp(cam.x - visW / 2, -M, L + M - visW);
+    const y0 = visH >= TH ? -M - (visH - TH) / 2 : U.clamp(cam.y - visH / 2, -M, Wd + M - visH);
+    return { x0, y0, S, w: visW, h: visH };
+  }
+  function moveCam(dt) {
+    let tx = ball.x + dirOf(poss) * 7, ty = ball.y;
+    let k = ball.fly && ball.fly.kind === 'shot' ? 4 : 2.2;
+    if (mode === 'celebrate' && celeb && pl[celeb.pid]) { tx = pl[celeb.pid].x; ty = pl[celeb.pid].y; k = 2.5; }
+    if (mode === 'reset') { tx = L / 2; ty = Wd / 2; }
+    cam.x += (tx - cam.x) * Math.min(1, dt * k);
+    cam.y += (ty - cam.y) * Math.min(1, dt * k * 0.8);
   }
 
   function draw(now) {
     const c = canvas.getContext('2d');
-    const s = scale;
-    const X = (x) => (x + M) * s, Y = (y) => (y + M) * s;
+    const V = view();
+    const s = V.S;
+    const X = (x) => (x - V.x0) * s, Y = (y) => (y - V.y0) * s;
+    const tv = camMode() === 'tv';
     // césped a franjas
     c.fillStyle = grassA;
     c.fillRect(0, 0, canvas.width, canvas.height);
     c.fillStyle = grassB;
     for (let i = 0; i < 12; i += 2) c.fillRect(X((L / 12) * i), 0, (L / 12) * s, canvas.height);
+    // carteles de publicidad junto a las líneas laterales
+    c.save();
+    c.font = `700 ${Math.round(1.1 * s)}px 'Barlow Condensed', 'Arial Narrow', sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (const [y0, y1] of [[-2.7, -1.3], [Wd + 1.3, Wd + 2.7]]) {
+      for (let i = 0, x = 0; x < L; i++, x += 15) {
+        const w = Math.min(15, L - x);
+        c.fillStyle = i % 2 ? '#101a28' : th.c1;
+        c.fillRect(X(x), Y(y0), w * s, (y1 - y0) * s);
+        c.fillStyle = i % 2 ? '#e7edf3' : (DT.UI ? DT.UI.textOn(th.c1) : '#fff');
+        c.fillText(String(BOARDS[i % BOARDS.length]).toUpperCase().slice(0, 18), X(x + w / 2), Y((y0 + y1) / 2));
+      }
+    }
+    c.restore();
     // líneas
     c.strokeStyle = 'rgba(255,255,255,0.6)';
     c.lineWidth = Math.max(1, s * 0.25);
@@ -6727,7 +7665,8 @@ DT.Pitch = function (canvas, sim, hooks) {
       c.restore();
     }
     // jugadores
-    const R = Math.max(7, s * 2.6);
+    const dpr = window.devicePixelRatio || 1;
+    const R = Math.min(17 * dpr, Math.max(7, s * (tv ? 1.75 : 2.6)));
     const list = Object.entries(pl).sort((a, b) => a[1].y - b[1].y);
     const carrier = ball.owner && !ball.fly ? String(ball.owner) : null;
     for (const [id, P] of list) {
@@ -6762,17 +7701,23 @@ DT.Pitch = function (canvas, sim, hooks) {
         c.fillRect(px + R * 0.6, py - R * 2.1, R * 0.8, R * 1.1);
       }
     }
-    // nombre del que tiene la pelota (o del goleador mientras festeja)
-    const tag = mode === 'celebrate' && celeb ? String(celeb.pid) : carrier;
-    if (tag && pl[tag]) {
+    // nombre del que tiene la pelota, del que va a recibir el pase y del goleador mientras festeja
+    const tags = [];
+    if (mode === 'celebrate' && celeb) tags.push(String(celeb.pid));
+    else {
+      if (carrier) tags.push(carrier);
+      if (ball.fly && ball.fly.to && pl[ball.fly.to]) tags.push(String(ball.fly.to));
+    }
+    for (const tag of tags) {
+      if (!pl[tag]) continue;
       const P = pl[tag];
       const txt = short(+tag);
-      c.font = `700 ${Math.round(R * 0.95)}px 'Barlow', sans-serif`;
+      c.font = `700 ${Math.round(R * (tv ? 0.8 : 0.95))}px 'Barlow', sans-serif`;
       c.textAlign = 'center'; c.textBaseline = 'bottom';
       c.lineWidth = Math.max(2, R * 0.3);
       c.strokeStyle = 'rgba(0,0,0,0.7)';
       c.strokeText(txt, X(P.x), Y(P.y) - R * 1.25);
-      c.fillStyle = '#fff';
+      c.fillStyle = tag === carrier || mode === 'celebrate' ? '#fff' : '#ffe9a6';
       c.fillText(txt, X(P.x), Y(P.y) - R * 1.25);
     }
     // pelota (con sombra; sube en los pases largos)
@@ -6781,6 +7726,29 @@ DT.Pitch = function (canvas, sim, hooks) {
     c.beginPath(); c.arc(X(ball.x) + br * 0.3, Y(ball.y) + br * 0.4, Math.max(2, br * 0.9), 0, Math.PI * 2); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fill();
     c.beginPath(); c.arc(X(ball.x), Y(ball.y) - lift, br, 0, Math.PI * 2); c.fillStyle = '#ffffff'; c.fill();
     c.lineWidth = 1; c.strokeStyle = '#222'; c.stroke();
+    // minimapa con toda la cancha (solo con la cámara de TV)
+    if (tv) {
+      const mw = Math.round(Math.min(canvas.width * 0.26, 210 * (window.devicePixelRatio || 1))), ms = mw / L, mh = Math.round(Wd * ms);
+      const mx = canvas.width - mw - Math.round(canvas.width * 0.025), my = Math.round(canvas.width * 0.025);
+      c.save();
+      c.globalAlpha = 0.85;
+      c.fillStyle = 'rgba(8,14,22,0.55)';
+      c.fillRect(mx - 3, my - 3, mw + 6, mh + 6);
+      c.strokeStyle = 'rgba(255,255,255,0.6)';
+      c.lineWidth = 1;
+      c.strokeRect(mx, my, mw, mh);
+      c.beginPath(); c.moveTo(mx + mw / 2, my); c.lineTo(mx + mw / 2, my + mh); c.stroke();
+      for (const id in pl) {
+        const P = pl[id];
+        c.fillStyle = P.gk ? gkKits[P.side].fill : kits[P.side].fill;
+        c.beginPath(); c.arc(mx + U.clamp(P.x, 0, L) * ms, my + U.clamp(P.y, 0, Wd) * ms, Math.max(1.6, mw / 70), 0, Math.PI * 2); c.fill();
+      }
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(mx + U.clamp(ball.x, 0, L) * ms, my + U.clamp(ball.y, 0, Wd) * ms, Math.max(1.8, mw / 60), 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#ffe36b';
+      c.strokeRect(mx + Math.max(0, V.x0) * ms, my + Math.max(0, V.y0) * ms, Math.min(L, V.w) * ms, Math.min(Wd, V.h) * ms);
+      c.restore();
+    }
     // relato corto de la jugada
     if (caption && caption.until > now && !(overlay && overlay.until > now)) {
       const fs = Math.max(11, Math.round(canvas.height * 0.045));
@@ -6815,6 +7783,13 @@ DT.Pitch = function (canvas, sim, hooks) {
     const dt = Math.min(0.1, (now - (last || now)) / 1000);
     last = now;
     step(now, dt);
+    moveCam(dt);
+    // la tribuna se enciende cuando la pelota se acerca a un arco
+    if (now - crowdT > 300) {
+      crowdT = now;
+      const dGoal = Math.min(ball.x, L - ball.x);
+      DT.Sound.crowdLevel(mode === 'celebrate' ? 1 : U.clamp((30 - dGoal) / 30, 0, 1));
+    }
     draw(now);
     raf = requestAnimationFrame(frame);
   }
@@ -6825,6 +7800,7 @@ DT.Pitch = function (canvas, sim, hooks) {
     start() { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } },
     stop() { if (raf) cancelAnimationFrame(raf); raf = null; },
     setTick(ms) { tickMs = ms; },
+    setCam() { resize(); },
     minute,
     kickoff,
     resize,
@@ -6841,7 +7817,7 @@ DT.MatchUI = (function () {
   const A = UI.A;
   const MU = {};
   // velocidad: valor guardado, nombre y milisegundos por minuto de juego
-  const SPEEDS = [[1, 'Lento', 1700], [2, 'Normal', 950], [4, 'Rápido', 380]];
+  const SPEEDS = [[1, 'x1', 1600], [2, 'x2', 800], [4, 'x4', 400]];
   const tickFor = (v) => (SPEEDS.find((s) => s[0] === v) || SPEEDS[2])[2];
   let sim = null, match = null, timer = null, side = 0, selOut = null, seen = 0, pitch = null, tab = 'feed', showLineups = false, started = false;
 
@@ -6955,11 +7931,13 @@ DT.MatchUI = (function () {
     if (pitch) pitch.setTick(ms);
     timer = setInterval(tick, ms);
     sim.running = true;
+    DT.Sound.crowdStart();
   }
   function stop() {
     if (timer) clearInterval(timer);
     timer = null;
     if (sim) sim.running = false;
+    DT.Sound.crowdStop();
   }
   function tick() {
     if (!sim) return stop();
@@ -7010,6 +7988,7 @@ DT.MatchUI = (function () {
       <button class="btn sm ${running ? '' : 'primary'}" data-a="mToggle">${running ? '❚❚' : '▶'} ${label}</button>
       <div class="seg sm">${SPEEDS.map(([v, l]) => `<button class="${(sp === v || (v === 4 && sp === 8)) ? 'on' : ''}" data-a="mSpeed" data-v="${v}">${l}</button>`).join('')}</div>
       <button class="btn sm ${DT.G.settings.sound !== false ? 'gold' : ''}" data-a="mSound">${DT.G.settings.sound !== false ? '✓ ' : ''}Sonido</button>
+      <button class="btn sm" data-a="mCam">${DT.G.settings.cam === 'full' ? '🗺 Cancha entera' : '📺 Cámara TV'}</button>
       <button class="btn sm" data-a="mLineups">${showLineups ? '▴ Ocultar planteo' : '▾ Ver planteo'}</button>
     </div>`;
   }
@@ -7047,7 +8026,7 @@ DT.MatchUI = (function () {
       const ic = e.type === 'yellow' ? '<span class="ic yellow"></span>' : e.type === 'red' ? '<span class="ic red"></span>' : '';
       const team = e.side >= 0 ? DT.G.teams[sim.s[e.side].tid].s : '';
       return `<div class="ev ${e.type} ${i < fresh ? 'new' : ''}"><span class="m">${e.m}'</span>${ic}<span class="grow">${team ? `<b class="tiny muted">${U.esc(team)}</b> ` : ''}${U.esc(e.text)}</span></div>`;
-    }).join('') || '<div class="small muted">Tocá Empezar para que ruede la pelota.</div>';
+    }).join('') || `<div class="small muted">${started ? 'Todavía no hubo jugadas destacadas.' : 'Tocá Empezar para que ruede la pelota.'}</div>`;
   }
   function subsPanel() {
     const G = DT.G;
@@ -7107,7 +8086,18 @@ DT.MatchUI = (function () {
 
   A.mTab = (d) => { tab = d.v; updateLive(true); };
   A.mLineups = () => { showLineups = !showLineups; $('lineups').innerHTML = lineups(); $('ctl').innerHTML = controls(); };
-  A.mSound = () => { DT.G.settings.sound = DT.G.settings.sound === false; DT.Sound.unlock(); $('ctl').innerHTML = controls(); };
+  A.mSound = () => {
+    DT.G.settings.sound = DT.G.settings.sound === false;
+    DT.Sound.unlock();
+    if (DT.G.settings.sound === false) DT.Sound.crowdStop();
+    else if (sim && sim.running) DT.Sound.crowdStart();
+    $('ctl').innerHTML = controls();
+  };
+  A.mCam = () => {
+    DT.G.settings.cam = DT.G.settings.cam === 'full' ? 'tv' : 'full';
+    if (pitch) pitch.setCam();
+    $('ctl').innerHTML = controls();
+  };
   A.mToggle = () => {
     DT.Sound.unlock();
     if (sim.running) { stop(); updateLive(true); return; }
@@ -7215,7 +8205,7 @@ DT.Main = (function () {
   const A = UI.A;
   const Main = { downloads: null };
   let saveCount = 0;
-  const start = { step: 1, cc: 'ARG', name: '', team: null, diff: 'arcade' };
+  const start = { step: 1, cc: 'ARG', name: '', team: null, diff: 'arcade', slot: 1 };
   const DIFFS = [
     ['arcade', 'Arcade', 'Elegís cualquier club, de los grandes a los chicos.'],
     ['real', 'Realista', 'Arrancás en un club modesto y hacés carrera hasta llegar a los grandes.'],
@@ -7248,6 +8238,7 @@ DT.Main = (function () {
     const ut = DT.userTeam();
     if (ut.capBase === undefined) DT.E.resetCap(ut);
     if (DT.G.settings.speed === 8) DT.G.settings.speed = 4;
+    if (!DT.G.retired) DT.Acad.ensure(ut);
     UI.tab = 'home';
     UI.compSel = null;
     UI.compCountry = null;
@@ -7262,14 +8253,31 @@ DT.Main = (function () {
     document.getElementById('tabs').hidden = true;
     document.getElementById('cta').innerHTML = '';
     document.getElementById('top').innerHTML = '';
-    const meta = fresh ? null : DT.Save.localMeta();
-    const cloudMeta = fresh ? null : await DT.Save.cloudMeta();
+    const cloudMeta = await DT.Save.cloudMeta();
     start.step = 1;
-    renderStart(meta, cloudMeta);
+    const metas = DT.Save.allMeta();
+    const free = metas.findIndex((m) => !m);
+    start.slot = free >= 0 ? free + 1 : DT.Save.slot;
+    renderStart(cloudMeta);
+    window.scrollTo(0, 0);
   };
 
-  function renderStart(meta, cloudMeta) {
+  // Las 3 carreras guardadas en el dispositivo.
+  function slotsCard(metas) {
+    const any = metas.some(Boolean);
+    return `<section class="card"><h2>Tus carreras</h2>${metas.map((m, i) => {
+      const n = i + 1;
+      if (!m) return `<div class="slot empty"><span class="slotn">${n}</span><div class="grow muted small">Espacio libre</div></div>`;
+      const tm = { id: m.tid, cc: m.tid ? m.tid.split('_')[0] : '', s: (m.team || '?').slice(0, 3).toUpperCase(), c1: '#8b95a3', c2: '#3a4656' };
+      return `<div class="slot"><span class="slotn">${n}</span>${m.tid ? UI.badge(tm) : ''}<div class="grow"><b>${U.esc(m.team)}</b><div class="tiny muted">${U.esc(m.mgr)} · temporada ${m.year}, semana ${m.week}${m.diff === 'real' ? ' · Realista' : ''}${m.retired ? ' · <span class="pill">Retirado</span>' : m.fired ? ' · <span class="pill bad">Sin club</span>' : ''}</div></div>
+        <button class="btn sm primary" data-a="loadSlot" data-n="${n}">${m.retired ? 'Ver' : 'Jugar'}</button><button class="btn sm" data-a="delSlotAsk" data-n="${n}" aria-label="Borrar la carrera ${n}">Borrar</button></div>`;
+    }).join('')}${any ? '' : '<div class="small muted">Todavía no tenés carreras guardadas. Empezá una nueva acá abajo.</div>'}</section>`;
+  }
+
+  function renderStart(cloudMeta) {
     const main = document.getElementById('main');
+    const metas = DT.Save.allMeta();
+    const meta = metas.find(Boolean);
     if (start.step === 1) {
       main.innerHTML = `
         <div class="hero">
@@ -7278,7 +8286,7 @@ DT.Main = (function () {
           <div class="muted">Dirigí a tu club en las 10 ligas de Sudamérica, la Libertadores y la Sudamericana.</div>
           ${UI.layoutSwitch()}
         </div>
-        ${meta ? `<section class="card"><span class="up">Partida guardada</span><div><b>${U.esc(meta.team)}</b> · ${U.esc(meta.mgr)} · temporada ${meta.year}, semana ${meta.week}${meta.retired ? ' · <span class="pill">Retirado</span>' : meta.fired ? ' · <span class="pill bad">Sin club</span>' : ''}</div><button class="btn primary block big" data-a="loadLocal">${meta.retired ? 'Ver resumen de la carrera' : 'Continuar partida'}</button></section>` : ''}
+        ${slotsCard(metas)}
         ${cloudMeta && (!meta || cloudMeta.at > meta.at) ? `<section class="card"><span class="up">En tu cuenta</span><div><b>${U.esc(cloudMeta.team)}</b> · temporada ${cloudMeta.year}, semana ${cloudMeta.week}</div><button class="btn block" data-a="loadCloud">Cargar desde la nube</button></section>` : ''}
         <section class="card">
           <h2>Nueva partida</h2>
@@ -7286,6 +8294,9 @@ DT.Main = (function () {
           <input type="text" id="mgrname" maxlength="30" placeholder="Ej: Marcelo Gallardo" value="${U.esc(start.name)}">
           <span class="up">Dificultad</span>
           <div class="diffpick">${DIFFS.map(([k, l, d]) => `<button class="${start.diff === k ? 'on' : ''}" data-a="stDiff" data-v="${k}" aria-pressed="${start.diff === k}"><b>${l}</b><span>${d}</span></button>`).join('')}</div>
+          <span class="up">Guardar en el espacio</span>
+          <div class="seg">${metas.map((m, i) => `<button class="${start.slot === i + 1 ? 'on' : ''}" data-a="stSlot" data-v="${i + 1}">${i + 1}${m ? ' · ocupado' : ' · libre'}</button>`).join('')}</div>
+          ${metas[start.slot - 1] ? `<div class="tiny" style="color:var(--warn)">Se va a reemplazar la carrera con ${U.esc(metas[start.slot - 1].team)}.</div>` : ''}
           <span class="up">Elegí el país</span>
           <div class="chips" style="flex-wrap:wrap">${DT.COUNTRY_ORDER.map((cc) => `<button class="chip ${start.cc === cc ? 'on' : ''}" data-a="stCountry" data-cc="${cc}">${DT.COUNTRIES[cc].flag} ${DT.COUNTRIES[cc].name}</button>`).join('')}</div>
           <button class="btn primary block" data-a="stNext">Elegir club</button>
@@ -7309,13 +8320,13 @@ DT.Main = (function () {
   }
   // vuelve a dibujar la pantalla inicial (al cambiar entre modo celular y ordenador)
   Main.refreshStart = async function () {
-    if (start.step === 1) renderStart(DT.Save.localMeta(), DT.Save.cloud.ready ? await DT.Save.cloudMeta() : null);
+    if (start.step === 1) renderStart(DT.Save.cloud.ready ? await DT.Save.cloudMeta() : null);
     else renderStart();
   };
   A.stCountry = (d) => {
     start.name = (document.getElementById('mgrname') || {}).value || start.name;
     start.cc = d.cc;
-    renderStart(DT.Save.localMeta(), null);
+    renderStart(null);
   };
   A.stNext = () => {
     start.name = (document.getElementById('mgrname') || {}).value || '';
@@ -7326,20 +8337,36 @@ DT.Main = (function () {
   A.stDiff = (d) => {
     start.name = (document.getElementById('mgrname') || {}).value || start.name;
     start.diff = d.v === 'real' ? 'real' : 'arcade';
-    renderStart(DT.Save.localMeta(), null);
+    renderStart(null);
   };
-  A.stBack = () => { start.step = 1; renderStart(DT.Save.localMeta(), null); };
+  A.stBack = () => { start.step = 1; renderStart(null); };
   A.stPick = (d) => {
     const name = (start.name || '').trim() || 'El Profe';
+    DT.Save.setSlot(start.slot || 1);
     DT.W.newGame(start.cc + '_' + d.code, name, start.diff);
     UI.tab = 'home';
     Main.autosave(true);
     UI.render();
     window.scrollTo(0, 0);
   };
-  A.loadLocal = async () => {
+  A.stSlot = (d) => {
+    start.name = (document.getElementById('mgrname') || {}).value || start.name;
+    start.slot = +d.v;
+    renderStart(null);
+  };
+  A.delSlotAsk = (d) => {
+    const m = DT.Save.localMeta(+d.n);
+    UI.modal(`<h3>¿Borrar la carrera ${d.n}?</h3><div class="small">Se borra la carrera de ${U.esc(m ? m.mgr : '')} con ${U.esc(m ? m.team : '')}. No se puede deshacer.</div><button class="btn danger block" data-a="delSlotDo" data-n="${d.n}">Borrar</button>`);
+  };
+  A.delSlotDo = (d) => {
+    DT.Save.clearLocal(+d.n);
+    UI.closeModal();
+    Main.showStart(false);
+  };
+  A.loadSlot = (d) => A.loadLocal(d);
+  A.loadLocal = async (d) => {
     try {
-      const ok = await DT.Save.loadLocal();
+      const ok = await DT.Save.loadLocal(d && d.n ? +d.n : 0);
       if (!ok) { UI.toast('No se encontró la partida.'); return; }
       Main.afterLoad();
     } catch (e) {
@@ -7514,7 +8541,7 @@ DT.Main = (function () {
     capInit.then(async () => {
       if (!DT.G && DT.Save.cloud.ready) {
         const cm = await DT.Save.cloudMeta();
-        if (cm) renderStart(DT.Save.localMeta(), cm);
+        if (cm) renderStart(cm);
       }
     });
   };

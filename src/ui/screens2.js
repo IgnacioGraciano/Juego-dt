@@ -61,12 +61,78 @@
     const G = DT.G;
     const t = DT.userTeam();
     const listed = t.squad.map((id) => G.players[id]).filter((p) => p.lst);
-    const offers = G.inbox.filter((m) => m.kind === 'transfer' && m.actions && !m.done);
-    return `<section class="card"><h3>Ofertas recibidas</h3>${offers.map(Sc.msg).join('') || '<div class="small muted">No hay ofertas. Poné jugadores en venta para atraer compradores; las ofertas llegan con el libro de pases abierto.</div>'}</section>
+    const old = G.inbox.filter((m) => m.kind === 'transfer' && m.actions && !m.done);
+    const offers = DT.M.openOffers();
+    const sellOns = Object.values(G.players).filter((p) => p.sellOn && p.sellOn.tid === t.id);
+    return `<section class="card"><h3>Ofertas recibidas</h3>${offers.map(Sc.offerCard).join('')}${old.map(Sc.msg).join('')}${offers.length || old.length ? '' : '<div class="small muted">No hay ofertas. Poné jugadores en venta para atraer compradores; las ofertas llegan con el libro de pases abierto y vencen a las 2 semanas.</div>'}</section>
       <section class="card"><h3>Jugadores en venta</h3><div class="list">${listed.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">Valor ${U.money(DT.P.value(p))}</div></div><span class="ovr">${p.ovr}</span></div>`).join('') || '<div class="small muted">Ninguno. Abrí la ficha de un jugador y tocá "Poner en venta".</div>'}</div></section>
+      <section class="card"><h3>Porcentajes de futura venta</h3><div class="list">${sellOns.map((p) => `<div class="li" data-a="player" data-id="${p.id}"><div class="name">${U.esc(p.n)}<div class="sub">${p.t ? `En ${U.esc(G.teams[p.t].n)}` : 'Libre'} · valor ${U.money(DT.P.value(p))}</div></div><span class="pill ok">${Math.round(p.sellOn.pct * 100)}%</span></div>`).join('') || '<div class="small muted">Cuando vendas con porcentaje de futura venta, acá ves a quién seguir: si lo vuelven a vender, cobrás tu parte.</div>'}</div></section>
       <section class="card"><h3>Cedidos a préstamo</h3><div class="list">${Object.values(G.players).filter((p) => p.loan && p.loan.from === t.id).map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">En ${U.esc(G.teams[p.t].n)} · ${p.st.pj} PJ · ${p.st.g} goles</div></div><span class="ovr">${p.ovr}</span></div>`).join('') || '<div class="small muted">No tenés jugadores cedidos.</div>'}</div></section>
       <section class="card"><h3>Vendidos al exterior</h3><div class="list">${G.abroad.slice(0, 15).map((x) => `<div class="li"><div class="name">${U.esc(x.n)}<div class="sub">${U.esc(x.from || '')} → ${U.esc(x.club)} · ${x.y}</div></div><b class="tab-nums">${U.money(x.fee)}</b></div>`).join('') || '<div class="small muted">Todavía no hubo ventas al exterior.</div>'}</div></section>`;
   };
+  const clauseTxt = (p) => { const c = DT.M.clause(p); return c ? ` · cláusula ${U.money(c)}` : ''; };
+  Sc.offerCard = function (o) {
+    const p = DT.G.players[o.pid];
+    return `<div class="msg pending"><div class="row between"><b>${U.esc(o.name)} quiere a ${U.esc(p.n)}</b><span class="tiny muted">S${o.w}</span></div>
+      <div class="small">${U.posName[p.pos]} · ${p.age} años · media ${p.ovr} · valor ${U.money(DT.P.value(p))}${clauseTxt(p)}</div>
+      <div class="row between"><span class="small">Oferta actual</span><b class="tab-nums" style="font-size:1.1rem">${U.money(o.fee)}</b></div>
+      ${o.t ? UI.tension(o.t) : ''}
+      <div class="actions"><button class="btn sm primary" data-a="offAccept" data-id="${o.id}">Aceptar ${U.money(o.fee)}</button><button class="btn sm" data-a="offNeg" data-id="${o.id}">Negociar</button><button class="btn sm danger" data-a="offReject" data-id="${o.id}">Rechazar</button></div></div>`;
+  };
+  // Negociación de una oferta recibida
+  const SNEG = {};
+  A.offNeg = (d) => {
+    const o = DT.M.getOffer(+d.id);
+    if (!o || o.st !== 'open') { UI.toast('La oferta ya no está vigente.'); UI.render(); return; }
+    const p = DT.G.players[o.pid];
+    SNEG.oid = o.id;
+    SNEG.ask = U.round(Math.max(o.fee * 1.15, DT.P.value(p)), stepFor(o.fee));
+    SNEG.sellOn = false;
+    SNEG.msg = '';
+    renderSellNeg();
+  };
+  function renderSellNeg() {
+    const o = DT.M.getOffer(SNEG.oid);
+    const p = DT.G.players[o.pid];
+    const open = o.st === 'open';
+    UI.modal(`<span class="kicker">Negociación</span><h3>${U.esc(o.name)} por ${U.esc(p.n)}</h3>
+      <div class="small muted">Valor de mercado ${U.money(DT.P.value(p))}. Si pedís más de lo que están dispuestos a pagar, sube la tensión, y cuanto más te pasás, más rápido sube. Si llega al máximo, se retiran.</div>
+      <div class="row between"><span class="small">Su oferta</span><b class="tab-nums" style="font-size:1.25rem">${U.money(o.fee)}</b></div>
+      ${UI.tension(o.t)}
+      ${open ? `<span class="up">Tu pedido</span>
+      <div class="stepper"><button class="btn" data-a="snegAsk" data-v="-1">−</button><div class="val">${U.money(SNEG.ask)}</div><button class="btn" data-a="snegAsk" data-v="1">+</button></div>
+      <div class="row wrap">${[1.1, 1.25, 1.5].map((k) => `<button class="chip" data-a="snegSet" data-v="${k}">+${Math.round((k - 1) * 100)}% de su oferta</button>`).join('')}</div>
+      ${o.buyer ? `<label class="toggle small"><input type="checkbox" data-c="snegSellOn" ${SNEG.sellOn ? 'checked' : ''}> Pedir 20% de una futura venta (pagan algo menos ahora)</label>` : ''}` : ''}
+      ${SNEG.msg ? `<div class="msg pending small">${U.esc(SNEG.msg)}</div>` : ''}
+      ${o.log.length > 1 ? `<div class="tiny muted">Antes: ${o.log.slice(1, 4).map(U.esc).join(' · ')}</div>` : ''}
+      ${open ? `<button class="btn primary block" data-a="snegSend">Pedir ${U.money(SNEG.ask)}</button><button class="btn gold block" data-a="snegAccept">Aceptar ${U.money(o.fee)}${SNEG.sellOn && o.buyer ? ' + 20%' : ''}</button>` : '<button class="btn block" data-a="closeModal">Cerrar</button>'}`);
+  }
+  A.snegAsk = (d) => { SNEG.ask = Math.max(10000, SNEG.ask + (+d.v) * stepFor(SNEG.ask)); renderSellNeg(); };
+  A.snegSet = (d) => { const o = DT.M.getOffer(SNEG.oid); SNEG.ask = U.round(o.fee * +d.v, stepFor(o.fee)); renderSellNeg(); };
+  A.snegSellOn = (d, el) => { SNEG.sellOn = el.checked; renderSellNeg(); };
+  A.snegSend = () => {
+    const r = DT.M.offerCounter(SNEG.oid, SNEG.ask, SNEG.sellOn);
+    SNEG.msg = r.msg;
+    if (r.res === 'accept') {
+      const a = DT.M.offerAccept(SNEG.oid, SNEG.sellOn);
+      UI.closeModal();
+      UI.toast(a.msg, 4000);
+      if (a.ok) DT.Main.autosave();
+      UI.render();
+      return;
+    }
+    UI.render();
+    renderSellNeg();
+  };
+  A.snegAccept = () => A.offAccept({ id: SNEG.oid, sellOn: SNEG.sellOn ? '1' : '' });
+  A.offAccept = (d) => {
+    const r = DT.M.offerAccept(+d.id, d.sellOn === '1');
+    UI.closeModal();
+    UI.toast(r.msg, 4000);
+    if (r.ok) DT.Main.autosave();
+    UI.render();
+  };
+  A.offReject = (d) => { DT.M.offerReject(+d.id); UI.closeModal(); UI.toast('Rechazaste la oferta.'); UI.render(); };
 
   // ================= FICHA DE JUGADOR =================
   A.player = (d) => {
@@ -80,7 +146,12 @@
     const avg = DT.P.avgRating(p);
     let actions = '';
     const known = DT.M.known(p);
-    if (mine && p.loan) {
+    const cl = DT.M.clause(p);
+    if (p.acad && mine) {
+      actions = `<div class="small muted">Juega en las inferiores. ${p.age >= DT.Acad.MAX_AGE ? '<b style="color:var(--warn)">Es su último año: si no lo subís, a fin de temporada se va libre.</b>' : `Puede quedarse hasta los ${DT.Acad.MAX_AGE} años.`}</div>
+        <button class="btn primary block" data-a="acadPromote" data-id="${p.id}">Subir al primer equipo</button>
+        <button class="btn danger block" data-a="acadRelease" data-id="${p.id}">Dejarlo libre</button>`;
+    } else if (mine && p.loan) {
       actions = `<div class="small muted">Está a préstamo desde ${U.esc(G.teams[p.loan.from] ? G.teams[p.loan.from].n : 'otro club')} y vuelve a fin de temporada.</div><button class="btn block" data-a="editName" data-id="${p.id}">Editar nombre</button>`;
     } else if (mine) {
       actions = `<div class="grid2">
@@ -92,6 +163,7 @@
       </div>`;
     } else if (tm && !tm.eur) {
       actions = `<button class="btn primary block" data-a="buyOpen" data-id="${p.id}">Hacer una oferta</button>
+        ${cl ? `<button class="btn gold block" data-a="payClause" data-id="${p.id}">Pagar la cláusula (${U.money(cl)})</button>` : ''}
         <div class="grid2">
           <button class="btn" data-a="loanInOpen" data-id="${p.id}">Pedir a préstamo</button>
           <button class="btn" data-a="compare" data-id="${p.id}">Comparar</button>
@@ -108,7 +180,8 @@
         <div><span>Potencial</span><b>${UI.potOf(p)}</b></div>
         <div><span>Valor</span><b>${U.money(val)}</b></div>
         <div><span>Sueldo/año</span><b>${U.money(p.w)}</b></div>
-        <div><span>Contrato</span><b>${p.t ? `${p.cy} ${p.cy === 1 ? 'año' : 'años'}` : '—'}</b></div>
+        <div><span>Contrato</span><b>${p.acad ? 'Inferiores' : p.t ? `${p.cy} ${p.cy === 1 ? 'año' : 'años'}` : '—'}</b></div>
+        <div><span>Cláusula</span><b>${p.acad || !p.t ? '—' : cl ? U.money(cl) : 'No tiene'}</b></div>
         <div><span>Físico</span><b>${Math.round(p.fit)}%</b></div>
         <div><span>Moral</span><b>${Math.round(p.mor)}</b></div>
       </div>
@@ -131,6 +204,28 @@
       ${titles.length ? `<div class="small">Títulos recientes: ${titles.map((x) => `${U.esc(x.c)} ${x.y}`).join(' · ')}</div>` : ''}
       <div class="list">${UI.grouped(ps, (p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años · ${U.money(DT.P.value(p))}</div></div>${UI.potOf(p)}<span class="ovr">${p.ovr}</span></div>`)}</div>`);
   };
+
+  A.payClause = (d) => {
+    const p = DT.G.players[+d.id];
+    const me = DT.userTeam();
+    if (!p || !p.t || p.t === me.id) return;
+    const cl = DT.M.clause(p);
+    if (!DT.S.windowOpen()) { UI.toast('El libro de pases está cerrado. Abre en las semanas 0–4 y 21–26.'); return; }
+    if (cl > DT.M.budget(me)) { UI.toast(`No te alcanza: la directiva autoriza hasta ${U.money(DT.M.budget(me))}.`); return; }
+    contractStep(p.id, cl, `Vas a pagar la cláusula de ${U.money(cl)}: ${DT.team(p.t).n} no se puede negar. Ahora convencé al jugador.`, true);
+  };
+  A.acadPromote = (d) => {
+    const r = DT.Acad.promote(+d.id);
+    UI.closeModal();
+    UI.toast(r.msg);
+    DT.Main.autosave();
+    UI.render();
+  };
+  A.acadRelease = (d) => {
+    const p = DT.G.players[+d.id];
+    UI.modal(`<h3>¿Dejar libre a ${U.esc(p.n)}?</h3><div class="small">Se va de las inferiores y su lugar queda libre hasta la próxima camada.</div><button class="btn danger block" data-a="acadReleaseDo" data-id="${p.id}">Sí, dejarlo libre</button>`);
+  };
+  A.acadReleaseDo = (d) => { DT.Acad.release(+d.id); UI.closeModal(); UI.render(); };
 
   A.scout = (d) => {
     const r = DT.M.scout(+d.id);
@@ -270,6 +365,7 @@
       <div class="stepper"><button class="btn" data-a="negFee" data-v="-1">−</button><div class="val">${U.money(NEG.fee)}</div><button class="btn" data-a="negFee" data-v="1">+</button></div>
       <div class="row wrap">${[0.8, 1, 1.2, 1.5].map((k) => `<button class="chip" data-a="negFeeSet" data-v="${k}">${k === 1 ? 'Valor' : (k > 1 ? '+' : '') + Math.round((k - 1) * 100) + '%'}</button>`).join('')}</div>
       <div class="small muted">Presupuesto disponible: ${U.money(DT.M.budget(DT.userTeam()))}</div>
+      ${UI.tension(DT.M.buyTension(p.id).v)}
       ${NEG.msg ? `<div class="msg pending small">${U.esc(NEG.msg)}</div>` : ''}
       ${NEG.counter ? `<button class="btn gold block" data-a="negAcceptCounter">Aceptar ${U.money(NEG.counter)}</button>` : ''}
       <button class="btn primary block" data-a="negSend">Enviar oferta</button>`);
@@ -290,9 +386,11 @@
     contractStep(NEG.pid, NEG.counter, 'Acuerdo entre clubes. Ahora negociá con el jugador.');
   };
 
-  function contractStep(pid, fee, msg) {
+  function contractStep(pid, fee, msg, byClause) {
     const p = DT.G.players[pid];
     const d = DT.P.demand(p, DT.userTeam());
+    NEG.clause = 'mid';
+    NEG.byClause = !!byClause;
     NEG.pid = pid;
     NEG.fee = fee;
     NEG.wage = U.round(d.w * 0.9, 1000);
@@ -306,7 +404,7 @@
   A.renewOpen = (d) => {
     const p = DT.G.players[+d.id];
     const dm = DT.M.renewDemand(p);
-    NEG.pid = p.id; NEG.fee = 0; NEG.wage = U.round(Math.max(p.w, dm.w * 0.92), 1000); NEG.years = dm.years; NEG.mode = 'renew';
+    NEG.pid = p.id; NEG.fee = 0; NEG.wage = U.round(dm.cut ? dm.w * 0.95 : Math.max(p.w, dm.w * 0.92), 1000); NEG.years = dm.years; NEG.mode = 'renew'; NEG.clause = 'mid';
     NEG.msg = p.mor < 30 ? `${p.n} está disconforme y difícilmente quiera renovar.` : '';
     renderContract();
   };
@@ -321,16 +419,20 @@
       <div class="stepper"><button class="btn" data-a="negWage" data-v="-1">−</button><div class="val">${U.money(NEG.wage)}</div><button class="btn" data-a="negWage" data-v="1">+</button></div>
       <span class="up">Años de contrato</span>
       <div class="seg">${[1, 2, 3, 4, 5].map((y) => `<button class="${NEG.years === y ? 'on' : ''}" data-a="negYears" data-v="${y}">${y}</button>`).join('')}</div>
+      <span class="up">Cláusula de rescisión</span>
+      <div class="seg">${DT.M.CLAUSES.map((c) => `<button class="${NEG.clause === c.k ? 'on' : ''}" data-a="negClause" data-v="${c.k}">${c.label}</button>`).join('')}</div>
+      <div class="tiny muted">${NEG.clause === 'none' ? 'Sin cláusula nadie se lo puede llevar sin tu permiso, pero el jugador pide más sueldo.' : `Cualquier club puede pagar ${U.money(DT.M.clauseAmount(p, NEG.clause))} y llevárselo. Más baja = el jugador acepta cobrar menos.`}</div>
       ${NEG.msg ? `<div class="msg pending small">${U.esc(NEG.msg)}</div>` : ''}
       ${payroll + NEG.wage > DT.E.wageCap(me) ? `<button class="btn block" data-a="capRaise">Pedirle a la directiva más tope salarial</button>` : ''}
       <button class="btn primary block" data-a="negContract">Ofrecer contrato</button>`);
   }
   A.negWage = (d) => { NEG.wage = Math.max(12000, NEG.wage + (+d.v) * stepFor(NEG.wage) / 2); renderContract(); };
   A.negYears = (d) => { NEG.years = +d.v; renderContract(); };
+  A.negClause = (d) => { NEG.clause = d.v; renderContract(); };
   A.negContract = () => {
     const p = DT.G.players[NEG.pid];
     if (NEG.mode === 'renew') {
-      const r = DT.M.renew(NEG.pid, NEG.wage, NEG.years);
+      const r = DT.M.renew(NEG.pid, NEG.wage, NEG.years, NEG.clause);
       if (r.res === 'accept') { UI.closeModal(); UI.toast(`${p.n} renovó por ${NEG.years} ${NEG.years === 1 ? 'año' : 'años'}.`); DT.Main.autosave(); UI.render(); return; }
       NEG.msg = r.msg;
       renderContract();
@@ -339,9 +441,9 @@
     const me = DT.userTeam();
     if (me.squad.length >= 34) { NEG.msg = 'El plantel está lleno (34 jugadores). Vendé o rescindí antes.'; renderContract(); return; }
     if (NEG.fee && NEG.fee > DT.M.budget(me)) { NEG.msg = 'Ya no tenés presupuesto para pagar la transferencia.'; renderContract(); return; }
-    const r = DT.M.contractTalk(NEG.pid, NEG.wage, NEG.years);
+    const r = DT.M.contractTalk(NEG.pid, NEG.wage, NEG.years, NEG.clause);
     if (r.res === 'accept') {
-      DT.M.completeSigning(NEG.pid, NEG.fee, NEG.wage, NEG.years);
+      DT.M.completeSigning(NEG.pid, NEG.fee, NEG.wage, NEG.years, NEG.clause, NEG.byClause);
       UI.closeModal();
       UI.toast(`¡${p.n} es nuevo jugador del club!`);
       DT.Main.autosave();
@@ -508,7 +610,50 @@
     UI.toast(`Nuevo desafío: ${DT.userTeam().n}.`);
   };
 
+  // Historial: temporadas, récords del club y logros.
   Sc.history = function () {
+    const v = UI.sub.hist || 'seasons';
+    const seg = `<div class="seg">${[['seasons', 'Temporadas'], ['rec', 'Récords'], ['ach', 'Logros']].map(([k, l]) => `<button class="${v === k ? 'on' : ''}" data-a="sub" data-k="hist" data-v="${k}">${l}</button>`).join('')}</div>`;
+    return seg + (v === 'rec' ? Sc.records() : v === 'ach' ? Sc.achievements() : Sc.seasons());
+  };
+
+  Sc.records = function () {
+    const G = DT.G;
+    const t = DT.userTeam();
+    const r = DT.Rec.of(t.id);
+    const [pj, g, e, p, gf, gc] = r.games;
+    const pl = Object.values(r.pl);
+    const top = (k, n) => pl.filter((x) => x[k] > 0).sort((a, b) => b[k] - a[k]).slice(0, n || 10);
+    const list = (rows, k, unit) => (rows.length ? `<div class="list">${rows.map((x, i) => `<div class="li"><span class="muted tab-nums" style="width:20px">${i + 1}</span><div class="name">${U.esc(x[0])}</div><b class="tab-nums">${x[k]} ${unit}</b></div>`).join('')}</div>` : '<div class="small muted">Todavía sin datos.</div>');
+    const score = (x) => (x ? `<b>${x[0]}-${x[1]}</b> vs ${U.esc(x[2])} <span class="muted">(${U.esc(x[4])}, ${x[3]})</span>` : '—');
+    const h2h = Object.values(r.h2h).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    return `<section class="card"><span class="up">${U.esc(t.n)} · desde ${r.since}</span>
+        <div class="kv"><div><span>Partidos</span><b>${pj}</b></div><div><span>G-E-P</span><b class="tab-nums" style="font-size:1rem">${g}-${e}-${p}</b></div><div><span>Goles</span><b class="tab-nums" style="font-size:1rem">${gf}-${gc}</b></div></div>
+        <div class="stack small">
+          <div class="row between"><span class="muted">Mayor goleada</span><span>${score(r.bigW)}</span></div>
+          <div class="row between"><span class="muted">Peor derrota</span><span>${score(r.bigL)}</span></div>
+          <div class="row between"><span class="muted">Racha invicta</span><b>${r.unb[1]} partidos${r.unb[0] ? ` <span class="muted" style="font-weight:400">(actual ${r.unb[0]})</span>` : ''}</b></div>
+          <div class="row between"><span class="muted">Victorias seguidas</span><b>${r.wins[1]}</b></div>
+          <div class="row between"><span class="muted">Goleador en una temporada</span><span>${r.seasonG ? `<b>${U.esc(r.seasonG[0])}</b> ${r.seasonG[1]} goles (${r.seasonG[2]})` : '—'}</span></div>
+          <div class="row between"><span class="muted">Mejor campaña</span><span>${r.bestPos ? `<b>${r.bestPos[0]}º</b> en ${U.esc(r.bestPos[3] || '')} (${r.bestPos[1]})` : '—'}</span></div>
+          <div class="row between"><span class="muted">Récord de público</span><span>${r.att ? `<b>${U.num(r.att[0])}</b> vs ${U.esc(r.att[1])} (${r.att[2]})` : '—'}</span></div>
+        </div></section>
+      <section class="card"><h3>Máximos goleadores</h3>${list(top(2), 2, 'goles')}</section>
+      <section class="card"><h3>Más partidos</h3>${list(top(1), 1, 'PJ')}</section>
+      <section class="card"><h3>Más asistencias</h3>${list(top(3, 5), 3, 'asist.')}</section>
+      <section class="card"><h3>Historial contra rivales</h3>${h2h.length ? `<div class="tablewrap"><table><thead><tr><th>#</th><th>Rival</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th></tr></thead><tbody>${h2h.map((x, i) => `<tr><td>${i + 1}</td><td class="team">${U.esc(x[0])}</td><td>${x[1]}</td><td>${x[2]}</td><td>${x[3]}</td><td>${x[4]}</td><td>${x[5]}</td><td>${x[6]}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Todavía sin partidos.</div>'}</section>
+      <section class="card flat small muted">Los récords cuentan los partidos con vos como DT de ${U.esc(t.n)}.</section>`;
+  };
+
+  Sc.achievements = function () {
+    const G = DT.G;
+    const got = G.ach || {};
+    const n = DT.Ach.LIST.filter((x) => got[x[0]]).length;
+    return `<section class="card"><div class="row between"><h2>Logros</h2><span class="pill gold">${n}/${DT.Ach.LIST.length}</span></div><div class="bar"><i style="width:${(n / DT.Ach.LIST.length) * 100}%;background:var(--gold)"></i></div></section>
+      <section class="card"><div class="achs">${DT.Ach.LIST.map(([id, ic, ti, de]) => `<div class="ach ${got[id] ? 'on' : ''}"><span class="ic">${got[id] ? ic : '🔒'}</span><div class="grow"><b>${U.esc(ti)}</b><div class="tiny muted">${U.esc(de)}${got[id] ? ` · ${got[id][0]}` : ''}</div></div></div>`).join('')}</div></section>`;
+  };
+
+  Sc.seasons = function () {
     const G = DT.G;
     const t = DT.userTeam();
     const names = { LIB: 'Libertadores', SUD: 'Sudamericana', REC: 'Recopa', INT: 'Intercontinental' };
@@ -544,12 +689,15 @@
       </section>
       <section class="card"><h3>Partidos</h3>
         <span class="up">Velocidad del partido en vivo</span>
-        <div class="seg">${[[1, 'Lenta'], [2, 'Normal'], [4, 'Rápida']].map(([v, l]) => `<button class="${G.settings.speed === v ? 'on' : ''}" data-a="setSpeed" data-v="${v}">${l}</button>`).join('')}</div>
+        <div class="seg">${[[1, 'x1'], [2, 'x2'], [4, 'x4']].map(([v, l]) => `<button class="${G.settings.speed === v ? 'on' : ''}" data-a="setSpeed" data-v="${v}">${l}</button>`).join('')}</div>
+        <span class="up">Cámara del partido</span>
+        <div class="seg">${[['tv', 'Cámara TV (sigue la jugada)'], ['full', 'Cancha entera']].map(([v, l]) => `<button class="${(G.settings.cam || 'tv') === v ? 'on' : ''}" data-a="setCam" data-v="${v}">${l}</button>`).join('')}</div>
       </section>
-      <section class="card"><h3>Nueva partida</h3><div class="small muted">Empezar de cero con otro club. Se pierde la partida actual (exportala antes si querés conservarla).</div><button class="btn danger block" data-a="newGameAsk">Empezar una nueva partida</button></section>
+      <section class="card"><h3>Otras carreras</h3><div class="small muted">Podés tener hasta 3 carreras guardadas. Esta está en el espacio ${DT.Save.slot}.</div><button class="btn block" data-a="newGameAsk">Volver al inicio</button></section>
       <section class="card flat small muted">Planteles aproximados a la temporada 2025/26. Los clubes con pocos datos completan su plantel con jugadores generados. Podés corregir cualquier nombre desde la ficha del jugador.</section>`;
   };
   A.setSpeed = (d) => { DT.G.settings.speed = +d.v; UI.render(); };
+  A.setCam = (d) => { DT.G.settings.cam = d.v; UI.render(); };
   A.saveNow = async () => {
     const ok = await DT.Main.autosave(true);
     UI.toast(ok ? 'Partida guardada.' : 'No se pudo guardar en este dispositivo. Exportá la partida para no perderla.');
@@ -600,11 +748,11 @@
     }
   };
   A.newGameAsk = () => {
-    UI.modal(`<h3>¿Empezar de cero?</h3><div class="small">Se borra la partida guardada en este dispositivo.</div><button class="btn danger block" data-a="newGameDo">Sí, nueva partida</button>`);
+    UI.modal(`<h3>Volver al inicio</h3><div class="small">Tu carrera actual queda guardada en el espacio ${DT.Save.slot}. En el inicio podés seguir otra carrera o empezar una nueva en cualquiera de los 3 espacios.</div><button class="btn primary block" data-a="newGameDo">Guardar y volver al inicio</button>`);
   };
-  A.newGameDo = () => {
-    DT.Save.clearLocal();
+  A.newGameDo = async () => {
+    await DT.Main.autosave(true);
     UI.closeModal();
-    DT.Main.showStart(true);
+    DT.Main.showStart(false);
   };
 })();

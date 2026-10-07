@@ -300,8 +300,11 @@ DT.S = (function () {
       if (match.ag > match.hg) DT.E.prize(away, P.win);
     }
     if (match.tie) S.resolveTie(G.season.ties[match.tie], match);
-    // Directiva y estadísticas del DT
-    if (DT.isUser(match.h) || DT.isUser(match.a)) DT.Board.afterMatch(match);
+    // Directiva, estadísticas del DT, récords y logros
+    if (DT.isUser(match.h) || DT.isUser(match.a)) {
+      DT.Board.afterMatch(match);
+      DT.Rec.match(match, sim);
+    }
   };
 
   S.resolveTie = function (tie, match) {
@@ -523,6 +526,7 @@ DT.S = (function () {
     if (DT.isUser(tid)) {
       G.manager.titles.push({ y: G.year, c: compName, t: t.n });
       G.manager.rep = Math.min(100, G.manager.rep + (compName.includes('Libertadores') ? 8 : compName.includes('Intercontinental') ? 6 : compName.includes('Sudamericana') ? 5 : 3));
+      DT.Ach.title(compName, t);
       DT.inbox({ title: `¡Campeones de la ${compName}!`, body: `El club levanta la ${compName} ${G.year}. La hinchada está de fiesta y la directiva te felicita.`, kind: 'title' });
       if (t.sponsor && t.sponsor.kind === 'titulos' && t.sponsor.bonus) {
         DT.E.add(t, 'Sponsors', t.sponsor.bonus);
@@ -595,6 +599,7 @@ DT.S = (function () {
         p.mor += (65 - p.mor) * 0.04;
       }
     }
+    DT.Acad.weekly(DT.userTeam());
     DT.M.weekly();
     DT.Board.weekly();
     if (!DT.G.pendingOffers) DT.Ev.weekly();

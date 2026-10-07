@@ -5,7 +5,7 @@ DT.MatchUI = (function () {
   const A = UI.A;
   const MU = {};
   // velocidad: valor guardado, nombre y milisegundos por minuto de juego
-  const SPEEDS = [[1, 'Lento', 1700], [2, 'Normal', 950], [4, 'Rápido', 380]];
+  const SPEEDS = [[1, 'x1', 1600], [2, 'x2', 800], [4, 'x4', 400]];
   const tickFor = (v) => (SPEEDS.find((s) => s[0] === v) || SPEEDS[2])[2];
   let sim = null, match = null, timer = null, side = 0, selOut = null, seen = 0, pitch = null, tab = 'feed', showLineups = false, started = false;
 
@@ -119,11 +119,13 @@ DT.MatchUI = (function () {
     if (pitch) pitch.setTick(ms);
     timer = setInterval(tick, ms);
     sim.running = true;
+    DT.Sound.crowdStart();
   }
   function stop() {
     if (timer) clearInterval(timer);
     timer = null;
     if (sim) sim.running = false;
+    DT.Sound.crowdStop();
   }
   function tick() {
     if (!sim) return stop();
@@ -174,6 +176,7 @@ DT.MatchUI = (function () {
       <button class="btn sm ${running ? '' : 'primary'}" data-a="mToggle">${running ? '❚❚' : '▶'} ${label}</button>
       <div class="seg sm">${SPEEDS.map(([v, l]) => `<button class="${(sp === v || (v === 4 && sp === 8)) ? 'on' : ''}" data-a="mSpeed" data-v="${v}">${l}</button>`).join('')}</div>
       <button class="btn sm ${DT.G.settings.sound !== false ? 'gold' : ''}" data-a="mSound">${DT.G.settings.sound !== false ? '✓ ' : ''}Sonido</button>
+      <button class="btn sm" data-a="mCam">${DT.G.settings.cam === 'full' ? '🗺 Cancha entera' : '📺 Cámara TV'}</button>
       <button class="btn sm" data-a="mLineups">${showLineups ? '▴ Ocultar planteo' : '▾ Ver planteo'}</button>
     </div>`;
   }
@@ -211,7 +214,7 @@ DT.MatchUI = (function () {
       const ic = e.type === 'yellow' ? '<span class="ic yellow"></span>' : e.type === 'red' ? '<span class="ic red"></span>' : '';
       const team = e.side >= 0 ? DT.G.teams[sim.s[e.side].tid].s : '';
       return `<div class="ev ${e.type} ${i < fresh ? 'new' : ''}"><span class="m">${e.m}'</span>${ic}<span class="grow">${team ? `<b class="tiny muted">${U.esc(team)}</b> ` : ''}${U.esc(e.text)}</span></div>`;
-    }).join('') || '<div class="small muted">Tocá Empezar para que ruede la pelota.</div>';
+    }).join('') || `<div class="small muted">${started ? 'Todavía no hubo jugadas destacadas.' : 'Tocá Empezar para que ruede la pelota.'}</div>`;
   }
   function subsPanel() {
     const G = DT.G;
@@ -271,7 +274,18 @@ DT.MatchUI = (function () {
 
   A.mTab = (d) => { tab = d.v; updateLive(true); };
   A.mLineups = () => { showLineups = !showLineups; $('lineups').innerHTML = lineups(); $('ctl').innerHTML = controls(); };
-  A.mSound = () => { DT.G.settings.sound = DT.G.settings.sound === false; DT.Sound.unlock(); $('ctl').innerHTML = controls(); };
+  A.mSound = () => {
+    DT.G.settings.sound = DT.G.settings.sound === false;
+    DT.Sound.unlock();
+    if (DT.G.settings.sound === false) DT.Sound.crowdStop();
+    else if (sim && sim.running) DT.Sound.crowdStart();
+    $('ctl').innerHTML = controls();
+  };
+  A.mCam = () => {
+    DT.G.settings.cam = DT.G.settings.cam === 'full' ? 'tv' : 'full';
+    if (pitch) pitch.setCam();
+    $('ctl').innerHTML = controls();
+  };
   A.mToggle = () => {
     DT.Sound.unlock();
     if (sim.running) { stop(); updateLive(true); return; }

@@ -55,7 +55,102 @@ DT.Sound = (function () {
     src.connect(f).connect(g).connect(c.destination);
     src.start(t);
   };
-  S.card = () => { if (on()) tone(1800, 0, 0.12, 0.08, 'square'); };
+  // Pitazo corto (faltas y tarjetas)
+  S.card = () => { if (!on()) return; tone(2900, 0, 0.16, 0.1, 'square'); tone(3150, 0, 0.16, 0.04, 'sine'); };
+  S.whistleShort = S.card;
+  function noise(len) {
+    const c = ctx();
+    const buf = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * len)), c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    return src;
+  }
+  // Patada: golpe grave + chasquido (más fuerte en los remates)
+  S.kick = (power) => {
+    if (!on()) return;
+    const c = ctx();
+    if (!c) return;
+    const t = c.currentTime, v = 0.05 + 0.16 * (power || 0.4);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.09);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.connect(g).connect(c.destination);
+    o.start(t); o.stop(t + 0.14);
+    const n = noise(0.03), f = c.createBiquadFilter(), g2 = c.createGain();
+    f.type = 'highpass'; f.frequency.value = 1800;
+    g2.gain.setValueAtTime(v * 0.35, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    n.connect(f).connect(g2).connect(c.destination);
+    n.start(t);
+  };
+  // "¡Uhhh!" de la tribuna en una atajada o un remate que se va cerca
+  S.oh = () => {
+    if (!on()) return;
+    const c = ctx();
+    if (!c) return;
+    const t = c.currentTime;
+    const n = noise(1.1), f = c.createBiquadFilter(), g = c.createGain();
+    f.type = 'bandpass'; f.Q.value = 1.2;
+    f.frequency.setValueAtTime(700, t);
+    f.frequency.linearRampToValueAtTime(320, t + 1);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.22, t + 0.15);
+    g.gain.linearRampToValueAtTime(0, t + 1.05);
+    n.connect(f).connect(g).connect(c.destination);
+    n.start(t);
+  };
+  // Red: la pelota se mete en el arco
+  S.net = () => {
+    if (!on()) return;
+    const c = ctx();
+    if (!c) return;
+    const t = c.currentTime;
+    const n = noise(0.3), f = c.createBiquadFilter(), g = c.createGain();
+    f.type = 'highpass'; f.frequency.value = 2500;
+    g.gain.setValueAtTime(0.09, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    n.connect(f).connect(g).connect(c.destination);
+    n.start(t);
+  };
+  // Murmullo de la tribuna: sube cuando la pelota se acerca a un arco
+  S.crowdStart = () => {
+    if (!on() || S.crowd) return;
+    const c = ctx();
+    if (!c) return;
+    const len = 4;
+    const buf = c.createBuffer(1, c.sampleRate * len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < d.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    const src = c.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 900;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, c.currentTime);
+    g.gain.linearRampToValueAtTime(0.05, c.currentTime + 0.8);
+    src.connect(f).connect(g).connect(c.destination);
+    src.start();
+    S.crowd = { src, g };
+  };
+  S.crowdLevel = (v) => {
+    const c = S.ctx;
+    if (!S.crowd || !c) return;
+    S.crowd.g.gain.setTargetAtTime(0.04 + 0.1 * v, c.currentTime, 0.35);
+  };
+  S.crowdStop = () => {
+    const c = S.ctx;
+    if (!S.crowd || !c) return;
+    const cr = S.crowd;
+    S.crowd = null;
+    cr.g.gain.setTargetAtTime(0, c.currentTime, 0.2);
+    setTimeout(() => { try { cr.src.stop(); } catch (e) { /* ya detenido */ } }, 900);
+  };
   return S;
 })();
 
@@ -82,6 +177,10 @@ DT.Pitch = function (canvas, sim, hooks) {
   const trails = [];
   const marks = [];
   let overlay = null, caption = null;
+  // cámara de TV: sigue la jugada con zoom; "full" muestra la cancha entera
+  const camMode = () => (G.settings.cam === 'full' ? 'full' : 'tv');
+  const cam = { x: L / 2, y: Wd / 2 };
+  let crowdT = 0;
   const css = getComputedStyle(document.documentElement);
   const grassA = css.getPropertyValue('--pitch-a').trim() || '#2f7d4f';
   const grassB = css.getPropertyValue('--pitch-b').trim() || '#2a7247';
@@ -103,6 +202,9 @@ DT.Pitch = function (canvas, sim, hooks) {
 
   DT.P.ensureNumbers(th);
   DT.P.ensureNumbers(ta);
+  // carteles de publicidad del estadio local
+  const homeSponsor = th.sponsor && th.sponsor.name && th.sponsor.name !== 'Sponsor' ? th.sponsor.name : DT.E.SPONSORS[th.n.length % DT.E.SPONSORS.length];
+  const BOARDS = [homeSponsor, 'DT Sudamericano', DT.COUNTRIES[th.cc] ? DT.COUNTRIES[th.cc].cup : 'Copa', homeSponsor, th.n];
 
   // Coordenadas "propias": distancia al arco que defiende cada equipo (el local ataca hacia la derecha).
   const dirOf = (s) => (s === 0 ? 1 : -1);
@@ -195,6 +297,8 @@ DT.Pitch = function (canvas, sim, hooks) {
     const a = lst.att;
     const plan = [];
     roles = {};
+    // la pelota quedó afuera: se reanuda (lateral, saque) antes de seguir
+    if (!ball.fly && (ball.x < 0 || ball.x > L || ball.y < 0 || ball.y > Wd)) plan.push({ k: 'restart', s: a, w: 0.6 });
     const ownerSide = ball.owner && pl[ball.owner] ? pl[ball.owner].side : -1;
     if (ownerSide !== a) plan.push({ k: 'win', s: a, w: 0.7 });
     if (lst.shot) {
@@ -217,27 +321,36 @@ DT.Pitch = function (canvas, sim, hooks) {
       surge = -1;
       const n = budget > 1300 ? U.ri(2, 4) : budget > 650 ? U.ri(1, 3) : U.ri(1, 2);
       for (let i = 0; i < n; i++) plan.push(Math.random() < 0.72 ? { k: 'pass', s: a, w: 1 } : { k: 'carry', s: a, w: 0.8 });
-      if (Math.random() < 0.3) plan.push({ k: 'lose', s: a, w: 1 });
-      else plan.push({ k: 'idle', w: 0.3 });
+      const r = Math.random();
+      if (r < 0.24) plan.push({ k: 'lose', s: a, w: 1 });
+      else if (r < 0.4) plan.push({ k: 'out', s: a, w: 0.9 });
+      else plan.push({ k: 'idle', s: a, w: 0.6 });
     }
     const tot = plan.reduce((t, x) => t + x.w, 0);
     for (const x of plan) x.dur = (budget * x.w) / tot;
     queue = plan;
     act = null;
-    for (const c of lst.cards) {
-      marks.push({ pid: c.pid, red: c.red, until: now + Math.max(1800, tickMs * 2) });
-      say(`${c.red ? 'Roja' : 'Amarilla'} para ${short(c.pid)}`);
-      DT.Sound.card();
+    // tarjetas: la jugada arranca con la falta y el tiro libre
+    const c0 = lst.cards[0];
+    if (c0) {
+      const fk = 1 - c0.side;
+      const rest = plan.filter((x) => x.k !== 'win' && x.k !== 'restart');
+      queue = [{ k: 'foul', s: fk, cards: lst.cards, dur: budget * 0.35 }].concat(fk !== a ? [{ k: 'win', s: a, dur: budget * 0.12 }] : [], rest.map((x) => Object.assign(x, { dur: x.dur * 0.55 })));
+    } else {
+      for (const c of lst.cards) {
+        marks.push({ pid: c.pid, red: c.red, until: now + Math.max(1800, tickMs * 2) });
+        DT.Sound.card();
+      }
     }
   }
 
   // receptor de un pase: compañero bien ubicado, en lo posible más adelante
-  function pickReceiver(s, from) {
+  function pickReceiver(s, from, back) {
     const F = pl[from];
     const d = dirOf(s);
     const cands = ids(s, true).filter((id) => id !== from);
     if (!cands.length) return null;
-    const want = U.rf(2, 16);
+    const want = back ? U.rf(-12, 2) : U.rf(2, 16);
     const ws = cands.map((id) => {
       const P = pl[id];
       const adv = (P.x - F.x) * d;
@@ -250,10 +363,13 @@ DT.Pitch = function (canvas, sim, hooks) {
     return U.weighted(cands, ws);
   }
 
-  function launch(tx, ty, dur, kind, onEnd) {
+  function launch(tx, ty, dur, kind, onEnd, opts) {
     const d = Math.hypot(tx - ball.x, ty - ball.y);
-    ball.fly = { fx: ball.x, fy: ball.y, tx, ty, t0: performance.now(), dur: Math.max(60, dur), h: kind === 'pass' && d > 26 ? Math.min(4, d / 10) : kind === 'shot' ? 0.8 : 0, kind, onEnd };
+    const h = opts && opts.h !== undefined ? opts.h : kind === 'pass' && d > 26 ? Math.min(4, d / 10) : kind === 'shot' ? 0.8 : 0;
+    ball.fly = { fx: ball.x, fy: ball.y, tx, ty, t0: performance.now(), dur: Math.max(60, dur), h, kind, onEnd, to: opts && opts.to };
     ball.owner = null;
+    if (kind === 'shot') DT.Sound.kick(1);
+    else if (kind !== 'win') DT.Sound.kick(d > 26 ? 0.6 : 0.3);
     if (kind !== 'win') {
       trails.push({ x1: ball.x, y1: ball.y, x2: tx, y2: ty, t: performance.now(), kind });
       if (trails.length > 8) trails.shift();
@@ -269,13 +385,50 @@ DT.Pitch = function (canvas, sim, hooks) {
     }
     a.t0 = now;
     act = a;
-    if (a.k === 'idle') return;
     let own0 = ball.owner && pl[ball.owner] ? ball.owner : null;
+    if (a.k === 'idle') {
+      // tiempo libre: el equipo hace circular la pelota hacia atrás o al costado
+      if (own0 && a.dur > 220 && mode === 'play') {
+        const to = pickReceiver(pl[own0].side, own0, true);
+        if (to) launch(pl[to].x, pl[to].y, Math.min(a.dur * 0.8, 900), 'pass', () => { ball.owner = to; }, { to });
+      }
+      return;
+    }
+    if (a.k === 'restart') {
+      // reanudación: lateral o saque desde donde salió la pelota
+      const bx = U.clamp(ball.x, 1, L - 1), by = U.clamp(ball.y, 0.4, Wd - 0.4);
+      ball.x = bx; ball.y = by; ball.z = 0;
+      const tk = nearest(a.s, bx, by, true);
+      if (tk) { pl[tk].x = bx - dirOf(a.s) * 0.6; pl[tk].y = by; ball.owner = tk; poss = a.s; }
+      return;
+    }
+    if (a.k === 'foul') {
+      // falta: pitazo, tarjeta y tiro libre para el equipo que la recibió
+      const c0 = a.cards[0];
+      const fouler = c0.pid;
+      const fk = a.s;
+      DT.Sound.whistleShort();
+      for (const c of a.cards) marks.push({ pid: c.pid, red: c.red, until: now + Math.max(2000, tickMs * 2.2) });
+      say(`Falta de ${short(fouler)}: ${c0.red ? '¡roja!' : 'amarilla'}`, Math.max(1300, tickMs * 1.6));
+      const victim = own0 && pl[own0].side === fk ? own0 : nearest(fk, ball.x, ball.y, true);
+      if (victim) { ball.owner = victim; poss = fk; }
+      if (pl[fouler]) roles[fouler] = { x: ball.x - dirOf(fk) * 3, y: ball.y + 2, v: 0.6 };
+      // barrera si la falta es cerca del arco
+      if (own(fk, ball.x) > 68) {
+        const gx = fromOwn(fk, L), gy = Wd / 2;
+        const ang = Math.atan2(gy - ball.y, gx - ball.x);
+        const wx = ball.x + Math.cos(ang) * 9.15, wy = ball.y + Math.sin(ang) * 9.15;
+        ids(1 - fk, true).map((id) => [id, Math.hypot(pl[id].x - wx, pl[id].y - wy)]).sort((p, q) => p[1] - q[1]).slice(0, 3)
+          .forEach(([id], i) => { roles[id] = { x: wx - Math.sin(ang) * (i - 1) * 0.9, y: wy + Math.cos(ang) * (i - 1) * 0.9, v: 1.4 }; });
+        say(`Tiro libre peligroso. Falta de ${short(fouler)}`, Math.max(1300, tickMs * 1.6));
+      }
+      return;
+    }
     if (a.k === 'win') {
       const w = (own0 && pl[own0].side === a.s) ? own0 : nearest(a.s, ball.x, ball.y, own(a.s, ball.x) > 16);
       if (!w) return;
       poss = a.s;
-      if (own0 && pl[own0].side !== a.s) say(`Recupera ${short(w)}`);
+      if (own0 && pl[own0].side !== a.s && Math.random() < 0.35) say(`Recupera ${short(w)}`);
       const P = pl[w];
       launch(P.x, P.y, a.dur * 0.7, 'win', () => { ball.owner = w; });
       return;
@@ -317,6 +470,76 @@ DT.Pitch = function (canvas, sim, hooks) {
       launch(dest.x, dest.y, a.dur * 0.8, 'pass', () => { ball.owner = to; });
       return;
     }
+    if (a.k === 'out') {
+      // pase que se va por el costado: lateral para el rival
+      const edge = O.y < Wd / 2 ? -0.8 : Wd + 0.8;
+      const tx = U.clamp(O.x + d * U.rf(4, 14), 2, L - 2);
+      const ts = 1 - O.side;
+      launch(tx, edge, a.dur * 0.55, 'pass', () => {
+        say('Lateral');
+        poss = ts;
+        const thr = nearest(ts, tx, edge, true);
+        if (thr) {
+          roles[thr] = { x: tx, y: U.clamp(edge, 0.2, Wd - 0.2), v: 1.6 };
+          queue.unshift({ k: 'throw', s: ts, thr, x: tx, y: U.clamp(edge, 0.2, Wd - 0.2), dur: Math.max(250, tickMs * 0.3), tries: 0 });
+        }
+      });
+      return;
+    }
+    if (a.k === 'throw') {
+      const T = pl[a.thr];
+      if (!T) return;
+      if (Math.hypot(T.x - a.x, T.y - a.y) > 1.5 && a.tries < 4) {
+        a.tries++;
+        queue.unshift(a);
+        act = { k: 'wait', t0: now, dur: 160 };
+        return;
+      }
+      ball.x = a.x; ball.y = a.y; ball.z = 1.8;
+      delete roles[a.thr];
+      const to = nearest(a.s, a.x, Wd / 2 * 0.3 + a.y * 0.7, true, a.thr);
+      if (to) launch(pl[to].x, pl[to].y, a.dur * 0.8, 'pass', () => { ball.owner = to; }, { h: 1.6, to });
+      return;
+    }
+    if (a.k === 'cornerSetup') {
+      // córner: la pelota al banderín, el pateador va y todos se acomodan en el área
+      const sAtt = a.s, def = 1 - sAtt;
+      const fx = fromOwn(sAtt, L - 0.3), fy = a.top ? 0.3 : Wd - 0.3;
+      ball.fly = null; ball.x = fx; ball.y = fy; ball.z = 0; ball.owner = null;
+      const atts = ids(sAtt, true).sort((p, q) => own(sAtt, pl[q].x) - own(sAtt, pl[p].x));
+      const taker = nearest(sAtt, fx, fy, true);
+      roles = {};
+      if (taker) roles[taker] = { x: fx - dirOf(sAtt) * 0.5, y: fy + (a.top ? 0.5 : -0.5), v: 2 };
+      const spots = [[94, -4], [96, 3], [92, 7], [99, -1], [88, 0]];
+      atts.filter((id) => id !== taker).slice(0, 5).forEach((id, i) => { roles[id] = { x: fromOwn(sAtt, spots[i][0]), y: Wd / 2 + spots[i][1], v: 1.6 }; });
+      ids(def, true).sort((p, q) => own(def, pl[p].x) - own(def, pl[q].x)).slice(0, 6)
+        .forEach((id, i) => { roles[id] = { x: fromOwn(def, U.rf(4, 10)), y: Wd / 2 + (i - 2.5) * 3.2, v: 1.6 }; });
+      a.taker = taker;
+      queue.unshift({ k: 'cross', s: sAtt, taker, fx, fy, dur: a.cross });
+      return;
+    }
+    if (a.k === 'cross') {
+      const sAtt = a.s, def = 1 - sAtt;
+      ball.x = a.fx; ball.y = a.fy;
+      const tx = fromOwn(sAtt, L - U.rf(6, 11)), ty = Wd / 2 + U.rf(-6, 6);
+      const gk = gkOf(def);
+      say(`Centro de ${short(a.taker)}`);
+      launch(tx, ty, a.dur * 0.9, 'pass', () => {
+        if (gk && Math.random() < 0.45) {
+          ball.owner = gk; poss = def; say(`La embolsa ${short(gk)}`);
+        } else {
+          const clr = nearest(def, tx, ty, true);
+          if (clr) {
+            say(`Despeja ${short(clr)}`);
+            ball.x = pl[clr].x; ball.y = pl[clr].y;
+            const ex = fromOwn(sAtt, U.rf(52, 68)), ey = U.rf(10, Wd - 10);
+            launch(ex, ey, Math.max(300, tickMs * 0.45), 'lost', () => { const w = nearest(def, ex, ey, true); ball.owner = w; poss = def; }, { h: 3 });
+          }
+        }
+        roles = {};
+      }, { h: 5 });
+      return;
+    }
     if (a.k === 'carry') {
       const u = own(O.side, O.x);
       const nu = Math.min(L - 14, u + U.rf(5, 12));
@@ -343,19 +566,36 @@ DT.Pitch = function (canvas, sim, hooks) {
         const gy = Wd / 2 + U.rf(-3, 3);
         if (gk) roles[gk] = { x: fromOwn(def, 1), y: Wd / 2 - Math.sign(gy - Wd / 2 || 1) * 2.5, dive: true };
         const scorer = own0;
-        launch(gx + d * 1.6, gy, a.dur * 0.75, 'shot', () => { shotUntil = 0; goal(scorer, s); });
+        launch(gx + d * 1.6, gy, a.dur * 0.75, 'shot', () => { shotUntil = 0; DT.Sound.net(); goal(scorer, s); });
       } else if (a.res === 'save') {
         const gy = Wd / 2 + U.rf(-2.8, 2.8);
         const sx = fromOwn(def, 1.3);
         if (gk) roles[gk] = { x: sx, y: gy, dive: true };
+        const corner = Math.random() < 0.4;
         launch(sx, gy, a.dur * 0.75, 'shot', () => {
-          shotUntil = 0;
-          if (gk && pl[gk]) { ball.owner = gk; poss = def; say(`¡Ataja ${short(gk)}!`); }
+          DT.Sound.oh();
+          if (!corner) {
+            shotUntil = 0;
+            if (gk && pl[gk]) { ball.owner = gk; poss = def; say(`¡Ataja ${short(gk)}!`); }
+            return;
+          }
+          // la manda al córner: la jugada sigue con el centro (el reloj espera)
+          const top = gy < Wd / 2;
+          say(`¡Atajada de ${short(gk)}! Córner`, Math.max(1200, tickMs * 1.4));
+          const sl = Math.max(0.5, Math.pow(pace(), -0.6));
+          const setup = 1100 * sl, cross = 700 * sl;
+          shotUntil = performance.now() + 300 * sl + setup + cross + 1400 * sl;
+          launch(fromOwn(s, L + 1.5), top ? -0.5 : Wd + 0.5, 300 * sl, 'lost', () => {
+            queue = [{ k: 'cornerSetup', s, top, dur: setup, cross }];
+            act = null;
+            setTimeout(() => { shotUntil = 0; }, setup + cross + 1400 * sl);
+          });
         });
       } else {
         const gy = Wd / 2 + (Math.random() < 0.5 ? -1 : 1) * U.rf(4.6, 10);
         launch(gx + d * 2.6, gy, a.dur * 0.75, 'shot', () => {
           shotUntil = 0;
+          DT.Sound.oh();
           say('Afuera. Saque de arco.');
           // saque de arco: la pelota vuelve al área chica del que defiende
           setTimeout(() => {
@@ -480,23 +720,60 @@ DT.Pitch = function (canvas, sim, hooks) {
     }
   }
 
+  // En modo TV la cancha es más alta en el celular para que los jugadores se vean grandes.
+  const ratio = () => (camMode() === 'tv' ? ((canvas.clientWidth || 340) < 700 ? 0.82 : 0.6) : TH / TW);
   function resize() {
     const dpr = window.devicePixelRatio || 1;
+    canvas.style.aspectRatio = String(1 / ratio());
     const w = canvas.clientWidth || 340;
     canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round((w * TH / TW) * dpr);
+    canvas.height = Math.round(w * ratio() * dpr);
     scale = canvas.width / TW;
+  }
+  // Ventana visible en metros: con cámara de TV se ve un pedazo de la cancha alrededor de la pelota.
+  function view() {
+    if (camMode() !== 'tv') return { x0: -M, y0: -M, S: scale, w: TW, h: canvas.height / scale };
+    const visW = (canvas.clientWidth || 340) < 700 ? 50 : 78;
+    const S = canvas.width / visW;
+    const visH = canvas.height / S;
+    const x0 = U.clamp(cam.x - visW / 2, -M, L + M - visW);
+    const y0 = visH >= TH ? -M - (visH - TH) / 2 : U.clamp(cam.y - visH / 2, -M, Wd + M - visH);
+    return { x0, y0, S, w: visW, h: visH };
+  }
+  function moveCam(dt) {
+    let tx = ball.x + dirOf(poss) * 7, ty = ball.y;
+    let k = ball.fly && ball.fly.kind === 'shot' ? 4 : 2.2;
+    if (mode === 'celebrate' && celeb && pl[celeb.pid]) { tx = pl[celeb.pid].x; ty = pl[celeb.pid].y; k = 2.5; }
+    if (mode === 'reset') { tx = L / 2; ty = Wd / 2; }
+    cam.x += (tx - cam.x) * Math.min(1, dt * k);
+    cam.y += (ty - cam.y) * Math.min(1, dt * k * 0.8);
   }
 
   function draw(now) {
     const c = canvas.getContext('2d');
-    const s = scale;
-    const X = (x) => (x + M) * s, Y = (y) => (y + M) * s;
+    const V = view();
+    const s = V.S;
+    const X = (x) => (x - V.x0) * s, Y = (y) => (y - V.y0) * s;
+    const tv = camMode() === 'tv';
     // césped a franjas
     c.fillStyle = grassA;
     c.fillRect(0, 0, canvas.width, canvas.height);
     c.fillStyle = grassB;
     for (let i = 0; i < 12; i += 2) c.fillRect(X((L / 12) * i), 0, (L / 12) * s, canvas.height);
+    // carteles de publicidad junto a las líneas laterales
+    c.save();
+    c.font = `700 ${Math.round(1.1 * s)}px 'Barlow Condensed', 'Arial Narrow', sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (const [y0, y1] of [[-2.7, -1.3], [Wd + 1.3, Wd + 2.7]]) {
+      for (let i = 0, x = 0; x < L; i++, x += 15) {
+        const w = Math.min(15, L - x);
+        c.fillStyle = i % 2 ? '#101a28' : th.c1;
+        c.fillRect(X(x), Y(y0), w * s, (y1 - y0) * s);
+        c.fillStyle = i % 2 ? '#e7edf3' : (DT.UI ? DT.UI.textOn(th.c1) : '#fff');
+        c.fillText(String(BOARDS[i % BOARDS.length]).toUpperCase().slice(0, 18), X(x + w / 2), Y((y0 + y1) / 2));
+      }
+    }
+    c.restore();
     // líneas
     c.strokeStyle = 'rgba(255,255,255,0.6)';
     c.lineWidth = Math.max(1, s * 0.25);
@@ -536,7 +813,8 @@ DT.Pitch = function (canvas, sim, hooks) {
       c.restore();
     }
     // jugadores
-    const R = Math.max(7, s * 2.6);
+    const dpr = window.devicePixelRatio || 1;
+    const R = Math.min(17 * dpr, Math.max(7, s * (tv ? 1.75 : 2.6)));
     const list = Object.entries(pl).sort((a, b) => a[1].y - b[1].y);
     const carrier = ball.owner && !ball.fly ? String(ball.owner) : null;
     for (const [id, P] of list) {
@@ -571,17 +849,23 @@ DT.Pitch = function (canvas, sim, hooks) {
         c.fillRect(px + R * 0.6, py - R * 2.1, R * 0.8, R * 1.1);
       }
     }
-    // nombre del que tiene la pelota (o del goleador mientras festeja)
-    const tag = mode === 'celebrate' && celeb ? String(celeb.pid) : carrier;
-    if (tag && pl[tag]) {
+    // nombre del que tiene la pelota, del que va a recibir el pase y del goleador mientras festeja
+    const tags = [];
+    if (mode === 'celebrate' && celeb) tags.push(String(celeb.pid));
+    else {
+      if (carrier) tags.push(carrier);
+      if (ball.fly && ball.fly.to && pl[ball.fly.to]) tags.push(String(ball.fly.to));
+    }
+    for (const tag of tags) {
+      if (!pl[tag]) continue;
       const P = pl[tag];
       const txt = short(+tag);
-      c.font = `700 ${Math.round(R * 0.95)}px 'Barlow', sans-serif`;
+      c.font = `700 ${Math.round(R * (tv ? 0.8 : 0.95))}px 'Barlow', sans-serif`;
       c.textAlign = 'center'; c.textBaseline = 'bottom';
       c.lineWidth = Math.max(2, R * 0.3);
       c.strokeStyle = 'rgba(0,0,0,0.7)';
       c.strokeText(txt, X(P.x), Y(P.y) - R * 1.25);
-      c.fillStyle = '#fff';
+      c.fillStyle = tag === carrier || mode === 'celebrate' ? '#fff' : '#ffe9a6';
       c.fillText(txt, X(P.x), Y(P.y) - R * 1.25);
     }
     // pelota (con sombra; sube en los pases largos)
@@ -590,6 +874,29 @@ DT.Pitch = function (canvas, sim, hooks) {
     c.beginPath(); c.arc(X(ball.x) + br * 0.3, Y(ball.y) + br * 0.4, Math.max(2, br * 0.9), 0, Math.PI * 2); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fill();
     c.beginPath(); c.arc(X(ball.x), Y(ball.y) - lift, br, 0, Math.PI * 2); c.fillStyle = '#ffffff'; c.fill();
     c.lineWidth = 1; c.strokeStyle = '#222'; c.stroke();
+    // minimapa con toda la cancha (solo con la cámara de TV)
+    if (tv) {
+      const mw = Math.round(Math.min(canvas.width * 0.26, 210 * (window.devicePixelRatio || 1))), ms = mw / L, mh = Math.round(Wd * ms);
+      const mx = canvas.width - mw - Math.round(canvas.width * 0.025), my = Math.round(canvas.width * 0.025);
+      c.save();
+      c.globalAlpha = 0.85;
+      c.fillStyle = 'rgba(8,14,22,0.55)';
+      c.fillRect(mx - 3, my - 3, mw + 6, mh + 6);
+      c.strokeStyle = 'rgba(255,255,255,0.6)';
+      c.lineWidth = 1;
+      c.strokeRect(mx, my, mw, mh);
+      c.beginPath(); c.moveTo(mx + mw / 2, my); c.lineTo(mx + mw / 2, my + mh); c.stroke();
+      for (const id in pl) {
+        const P = pl[id];
+        c.fillStyle = P.gk ? gkKits[P.side].fill : kits[P.side].fill;
+        c.beginPath(); c.arc(mx + U.clamp(P.x, 0, L) * ms, my + U.clamp(P.y, 0, Wd) * ms, Math.max(1.6, mw / 70), 0, Math.PI * 2); c.fill();
+      }
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(mx + U.clamp(ball.x, 0, L) * ms, my + U.clamp(ball.y, 0, Wd) * ms, Math.max(1.8, mw / 60), 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#ffe36b';
+      c.strokeRect(mx + Math.max(0, V.x0) * ms, my + Math.max(0, V.y0) * ms, Math.min(L, V.w) * ms, Math.min(Wd, V.h) * ms);
+      c.restore();
+    }
     // relato corto de la jugada
     if (caption && caption.until > now && !(overlay && overlay.until > now)) {
       const fs = Math.max(11, Math.round(canvas.height * 0.045));
@@ -624,6 +931,13 @@ DT.Pitch = function (canvas, sim, hooks) {
     const dt = Math.min(0.1, (now - (last || now)) / 1000);
     last = now;
     step(now, dt);
+    moveCam(dt);
+    // la tribuna se enciende cuando la pelota se acerca a un arco
+    if (now - crowdT > 300) {
+      crowdT = now;
+      const dGoal = Math.min(ball.x, L - ball.x);
+      DT.Sound.crowdLevel(mode === 'celebrate' ? 1 : U.clamp((30 - dGoal) / 30, 0, 1));
+    }
     draw(now);
     raf = requestAnimationFrame(frame);
   }
@@ -634,6 +948,7 @@ DT.Pitch = function (canvas, sim, hooks) {
     start() { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } },
     stop() { if (raf) cancelAnimationFrame(raf); raf = null; },
     setTick(ms) { tickMs = ms; },
+    setCam() { resize(); },
     minute,
     kickoff,
     resize,

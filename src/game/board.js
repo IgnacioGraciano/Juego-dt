@@ -210,6 +210,10 @@ DT.Board = (function () {
       M.conf = Math.min(100, M.conf + 35);
       M.rep = Math.min(100, M.rep + 6);
       msg = `¡Ascenso! ${t.n} terminó ${finalPos}º y vuelve a jugar en ${DT.COUNTRIES[t.cc].league}. La directiva está feliz.`;
+      if (o && finalPos <= o.target && t.sponsor && t.sponsor.kind === 'objetivo' && t.sponsor.bonus) {
+        DT.E.add(t, 'Sponsors', t.sponsor.bonus);
+        msg += ` ${t.sponsor.name} pagó el premio por objetivo (${U.money(t.sponsor.bonus)}).`;
+      }
     } else if (o && finalPos <= o.target) {
       M.conf = Math.min(100, M.conf + 25);
       M.rep = Math.min(100, M.rep + (finalPos < o.target ? 4 : 2));
