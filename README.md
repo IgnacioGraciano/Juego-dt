@@ -9,7 +9,7 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 ## Cómo jugar
 
 - Abrí `index.html` en el navegador del celular, o publicalo con GitHub Pages (Settings → Pages → rama principal, carpeta raíz).
-- La partida se guarda sola en el dispositivo. Desde **Club → Partida** podés exportarla e importarla.
+- La partida se guarda sola en el dispositivo, en uno de **3 espacios**: podés tener hasta 3 carreras a la vez. Desde **Club → Partida** podés exportarla e importarla.
 
 ## Qué incluye
 
@@ -24,7 +24,9 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 **Partidos**
 - Partido en la cancha: cada minuto simulado se ve como una jugada. El equipo con la pelota avanza con pases (con su estela) y conducciones, el rival presiona y corta pases, y los remates terminan en gol, atajada o afuera. En los goles la pelota entra al arco, el marcador cambia en ese momento y el goleador festeja antes del saque del medio.
 - Simulación minuto a minuto con relato, estadísticas, tarjetas, lesiones y penales. Clima de cada partido y sonidos (silbato, gol), que se pueden apagar.
-- Partido en vivo con pausa, 3 velocidades, 5 cambios, mentalidad y presión ajustables, o resultado rápido desde el botón Simular.
+- Cámara de TV que sigue la jugada (con minimapa y carteles de publicidad) o cancha entera. Faltas con barrera y tarjeta, laterales, córners con centro al área y saques de arco.
+- Sonidos de patadas, remates, red, silbatos, el murmullo de la tribuna que sube cerca del arco y el "uhhh" en las atajadas.
+- Partido en vivo con pausa, velocidades x1, x2 y x4, 5 cambios, mentalidad y presión ajustables, o resultado rápido desde el botón Simular.
 - Clásicos (Superclásico, Fla-Flu, Gre-Nal, clásico uruguayo y más) con más público y más presión.
 - Avisos antes del partido: titulares cansados, fuera de puesto, lesionados o suspendidos.
 - Tácticas simples: 8 formaciones, 5 mentalidades y 3 niveles de presión.
@@ -36,7 +38,13 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 - Préstamos bancarios con cuotas, tope salarial de la directiva, presupuesto de fichajes, evolución de la caja y balances por temporada.
 - Ampliación del estadio y mejoras de centro de entrenamiento, divisiones inferiores y departamento médico.
 
+**Inferiores**
+- 18 juveniles de 14 a 21 años en Plantel → Inferiores. Entrenan solos y solo suben al primer equipo cuando los ascendés. Al cumplir 22, si no los subiste, se van libres. Cada fin de temporada llega una camada nueva.
+
 **Mercado**
+- Cláusulas de rescisión: se eligen al firmar o renovar (baja, media, alta o sin cláusula). Podés pagar la cláusula de un jugador de otro club y otros clubes pueden pagar la de los tuyos.
+- Renovaciones: los jóvenes piden aumento; los veteranos pueden aceptar cobrar menos para seguir.
+- Ofertas por tus jugadores en Mercado → Mis ventas: se aceptan o se negocian con una barra de tensión que sube cada vez más rápido si pedís de más. También hay tensión cuando ofertás bajo por un jugador ajeno.
 - Ojeadores: el potencial de los jugadores de otros clubes queda oculto hasta que mandás a observarlos.
 - Préstamos: cedé jugadores para que sumen minutos o pedí a préstamo jugadores de otros clubes hasta fin de temporada.
 - Porcentaje de futura venta: al vender podés quedarte con el 20% de una próxima transferencia.
@@ -55,6 +63,8 @@ No necesita instalación: es un único archivo `index.html` que funciona en cual
 - Directiva con objetivos y confianza. En **Club → Directiva** ves los clubes interesados en vos (se renuevan cada 6 semanas según tu reputación) y podés renunciar para irte a uno de ellos.
 - Si te despiden, aparece una pantalla de despido: ya no podés manejar el club anterior y elegís entre ver los clubes interesados o retirarte. Al retirarte ves el resumen de tu carrera.
 - Historial de campeones, vitrina del club y trayectoria del DT.
+- Resumen semanal a pantalla completa al pasar de semana: novedades del plantel (lesiones, suspendidos, cansados, juveniles que crecen), del mercado y de tu liga. Se puede desactivar.
+- Récords del club (goleadores, más partidos, mayores goleadas, rachas, historial contra cada rival) y 25 logros para desbloquear.
 
 ## Datos
 

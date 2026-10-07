@@ -109,6 +109,8 @@ DT.End = (function () {
     }
 
     DT.Board.seasonEnd(userPos, userRelegated, userPromoted);
+    DT.Rec.season(userPos, hist.user.div);
+    DT.Ach.season(userPromoted);
 
     // Finanzas: cierre del ejercicio
     for (const id in G.teams) if (!G.teams[id].eur) DT.E.closeSeason(G.teams[id]);
@@ -193,6 +195,7 @@ DT.End = (function () {
       const team = p.t ? G.teams[p.t] : null;
       if (team && team.eur) continue;
       DT.P.ageUp(p);
+      if (p.acad) continue; // inferiores: se resuelven aparte
       p.fit = 100; p.sus = 0; p.yc = 0;
       p.inj = Math.max(0, p.inj - 6);
       if (U.chance(DT.P.retireChance(p))) {
@@ -212,37 +215,24 @@ DT.End = (function () {
         }
       }
     }
-    // Joyas de inferiores que esperaban a fin de temporada
-    const promotedKids = [];
-    for (const y of G.pendingYouth || []) {
-      const t = G.teams[y.t];
-      if (!t || !DT.isUser(t.id)) continue;
-      const p = DT.P.create({ n: y.n, pos: y.pos, age: y.age + 1, ovr: y.ovr, pot: y.pot, t: t.id, cy: 4, yt: true });
-      p.w = 15000;
-      t.squad.push(p.id);
-      promotedKids.push(p.id);
-    }
+    // Inferiores del usuario: se van los mayores de 21 y llegan chicos nuevos
+    const acad = DT.Acad.seasonEnd(me);
     G.pendingYouth = [];
     // IA: renovaciones, juveniles y completar planteles
     for (const id in G.teams) {
       const t = G.teams[id];
       if (t.eur) continue;
-      if (!DT.isUser(id)) DT.AI.renewals(t);
-      const n = 2 + (t.infra.youth >= 4 ? 1 : 0) + (U.chance(0.4) ? 1 : 0);
-      const kids = [];
-      for (let i = 0; i < n; i++) {
-        const k = DT.P.youth(t);
-        t.squad.push(k.id);
-        kids.push(k);
-      }
       if (DT.isUser(id)) {
-        // aviso en pantalla con los juveniles que subieron al plantel
-        G.notices = (G.notices || []).concat([{ kind: 'youth', title: 'Suben juveniles al primer equipo', pids: promotedKids.concat(kids.map((k) => k.id)) }]);
-        DT.inbox({ title: 'Suben juveniles de la cantera', body: kids.map((k) => `${k.n} (${U.posName[k.pos]}, ${k.age} años, media ${k.ovr}, potencial ${'★'.repeat(DT.P.stars(k.pot))})`).join('. ') + '.', kind: 'squad' });
-      } else {
-        DT.AI.ensureSquad(t);
-        DT.AI.trimSquad(t, 30);
+        // el usuario no recibe juveniles automáticos: los asciende él desde las inferiores
+        G.notices = (G.notices || []).concat([{ kind: 'acad', title: 'Llegaron chicos a las inferiores', pids: acad.arrived, left: acad.left, cut: acad.cut }]);
+        DT.inbox({ title: 'Movimientos en las inferiores', body: `Llegaron ${acad.arrived.length} chicos nuevos.${acad.left.length ? ` Se fueron libres por edad: ${acad.left.join(', ')}.` : ''}${acad.cut.length ? ` Quedaron afuera por cupo: ${acad.cut.join(', ')}.` : ''}`, kind: 'squad' });
+        continue;
       }
+      DT.AI.renewals(t);
+      const n = 2 + (t.infra.youth >= 4 ? 1 : 0) + (U.chance(0.4) ? 1 : 0);
+      for (let i = 0; i < n; i++) t.squad.push(DT.P.youth(t).id);
+      DT.AI.ensureSquad(t);
+      DT.AI.trimSquad(t, 30);
     }
     // Libres: limitar la bolsa
     const free = Object.values(G.players).filter((p) => !p.t);

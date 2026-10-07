@@ -20,6 +20,8 @@ module.exports = {
     'src/game/end.js',
     'src/game/actions.js',
     'src/game/events.js',
+    'src/game/academy.js',
+    'src/game/records.js',
     'src/game/save.js',
   ],
   ui: [
@@ -28,6 +30,7 @@ module.exports = {
     'src/ui/screens2.js',
     'src/ui/pitch.js',
     'src/ui/match_ui.js',
+    'src/ui/week.js',
     'src/ui/main.js',
   ],
 };

@@ -145,10 +145,14 @@ DT.W = (function () {
     const old = G.user;
     G.user = tid;
     const t = G.teams[tid];
+    // inferiores: solo se siguen las del club que dirige el usuario
+    if (old && old !== tid && G.teams[old]) { DT.Acad.drop(G.teams[old]); delete G.teams[old].academy; }
+    DT.Acad.ensure(t);
     // en modo realista el DT arranca sin nombre y tiene que hacer carrera
     if (first) G.manager.rep = G.settings.diff === 'real' ? U.clamp(t.rep - 18, 22, 45) : U.clamp(t.rep - 12, 35, 80);
     G.manager.conf = 60;
     G.manager.clubs.push({ id: tid, n: t.n, from: G.year });
+    if (DT.Ach) DT.Ach.job();
     t.xi = null;
     t.autoXI = true;
     DT.E.resetCap(t);

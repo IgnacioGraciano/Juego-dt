@@ -72,6 +72,12 @@ DT.UI = (function () {
       return head + row(x);
     }).join('');
   };
+  // Barra de tensión de una negociación (0 a 100).
+  UI.tension = (v) => {
+    const t = Math.round(Math.max(0, Math.min(100, v || 0)));
+    const lbl = t >= 75 ? 'A punto de levantarse' : t >= 45 ? 'Tensa' : t > 0 ? 'Tranquila' : 'Sin tensión';
+    return `<div class="tension"><div class="row between tiny"><span class="up">Tensión</span><span style="color:${t >= 75 ? 'var(--loss)' : t >= 45 ? 'var(--warn)' : 'var(--muted)'};font-weight:700">${lbl}</span></div><div class="bar ${t >= 75 ? 'bad' : t >= 45 ? 'warn' : ''}"><i style="width:${t}%"></i></div></div>`;
+  };
   UI.formChips = (form) => form.slice(-5).map((r) => `<span class="res ${r}">${r}</span>`).join('');
   UI.dateLabel = () => {
     const G = DT.G;
@@ -98,11 +104,51 @@ DT.UI = (function () {
   };
   UI.A.closeModal = () => { UI.closeModal(); UI.showNotices(); };
 
+  // Logros recién desbloqueados: aviso breve.
+  UI.achToast = function () {
+    const G = DT.G;
+    if (!G || !G.achNew || !G.achNew.length) return;
+    const items = G.achNew.map((id) => DT.Ach.info(id)).filter(Boolean);
+    G.achNew = [];
+    if (items.length) UI.toast(`${items[0][1]} Logro desbloqueado: ${items.map((x) => x[2]).join(', ')}`, 4200);
+  };
+
   // Avisos que aparecen solos en pantalla (por ejemplo, juveniles que suben al plantel).
   UI.showNotices = function () {
     const G = DT.G;
-    if (!G || !G.notices || !G.notices.length || !$('#modal').hidden) return;
+    if (!G || !$('#modal').hidden) return;
+    if (!G.notices || !G.notices.length) {
+      // sin avisos pendientes: si pasó la semana, el resumen semanal
+      if (DT.Week && !UI.skipWeek && $('#overlay').hidden && DT.Week.due()) DT.Week.show();
+      return;
+    }
     const n = G.notices.shift();
+    if (n.kind === 'offer') {
+      const o = DT.M.getOffer(n.oid);
+      const p = o && G.players[o.pid];
+      if (!o || o.st !== 'open' || !p || p.t !== G.user) { UI.showNotices(); return; }
+      UI.modal(`<span class="kicker">Mercado de pases</span><h2>Oferta por ${U.esc(p.n)}</h2>
+        <div class="small"><b>${U.esc(o.name)}</b> ofrece <b>${U.money(o.fee)}</b> por ${U.esc(p.n)} (${U.posName[p.pos]}, ${p.age} años, media ${p.ovr}). Valor estimado: ${U.money(DT.P.value(p))}.</div>
+        <div class="small muted">La oferta queda en Mercado → Mis ventas durante 2 semanas.</div>
+        <button class="btn primary block" data-a="offAccept" data-id="${o.id}">Aceptar ${U.money(o.fee)}</button>
+        <button class="btn gold block" data-a="offNeg" data-id="${o.id}">Negociar</button>
+        <button class="btn block" data-a="closeModal">Decidir después</button>`);
+      return;
+    }
+    if (n.kind === 'msg') {
+      UI.modal(`<h2>${U.esc(n.title)}</h2><div class="small">${U.esc(n.body)}</div><button class="btn primary block" data-a="closeModal">Entendido</button>`);
+      return;
+    }
+    if (n.kind === 'acad') {
+      const ps = (n.pids || []).map((id) => G.players[id]).filter((p) => p && p.acad).sort(UI.byPos);
+      UI.modal(`<span class="kicker">Inferiores</span><h2>${U.esc(n.title)}</h2>
+        <div class="small">${ps.length} chicos nuevos se suman a las inferiores. Subilos al primer equipo cuando estén listos desde Plantel → Inferiores.</div>
+        ${n.left && n.left.length ? `<div class="small muted">Se fueron libres por cumplir 22: ${n.left.map(U.esc).join(', ')}.</div>` : ''}
+        ${n.cut && n.cut.length ? `<div class="small muted">Quedaron afuera por cupo: ${n.cut.map(U.esc).join(', ')}.</div>` : ''}
+        <section class="card"><div class="list">${ps.map((p) => `<div class="li" data-a="player" data-id="${p.id}">${UI.pos(p)}<div class="name">${U.esc(p.n)}<div class="sub">${p.age} años</div></div>${UI.stars(p.pot)}<span class="ovr">${p.ovr}</span></div>`).join('')}</div></section>
+        <button class="btn primary block" data-a="closeModal">Entendido</button>`);
+      return;
+    }
     if (n.kind === 'youth') {
       const ps = (n.pids || []).map((id) => G.players[id]).filter((p) => p && p.t === G.user).sort(UI.byPos);
       if (!ps.length) { UI.showNotices(); return; }
@@ -174,6 +220,7 @@ DT.UI = (function () {
     main.innerHTML = scr();
     UI.renderCTA();
     UI.showNotices();
+    UI.achToast();
   };
 
   UI.A.quickMatch = () => {

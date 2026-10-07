@@ -14,7 +14,12 @@ const { chromium } = require('playwright');
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.goto('file://' + path.join(__dirname, '..', 'index.html'));
   const shot = async (n) => page.screenshot({ path: path.join(out, n + '.png'), fullPage: false });
-  const click = async (sel) => { await page.click(sel); await page.waitForTimeout(150); };
+  const click = async (sel) => {
+    // el resumen semanal aparece al pasar de semana: se cierra con "Seguir"
+    if (sel !== '[data-a="wkDone"]' && (await page.$('[data-a="wkDone"]'))) { await page.click('[data-a="wkDone"]'); await page.waitForTimeout(150); }
+    await page.click(sel);
+    await page.waitForTimeout(150);
+  };
 
   await page.waitForSelector('#mgrname');
   await shot('01-inicio');
@@ -47,9 +52,10 @@ const { chromium } = require('playwright');
   await click('[data-a="closeModal"]');
   // avanzar hasta el primer partido
   await click('[data-a="tab"][data-tab="home"]');
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     await click('[data-a="advance"]');
-    if (await page.$('#overlay:not([hidden])')) break;
+    if (await page.$('[data-a="mLive"]')) break;
+    while (await page.$('#modal:not([hidden])')) await click('#modal .sheet > [data-a="closeModal"]');
     const ms = await page.$$('[data-a="msgAct"]');
     if (ms.length) await click('[data-a="msgAct"]');
   }
@@ -65,14 +71,18 @@ const { chromium } = require('playwright');
   await click('[data-a="mDone"]');
   // varias semanas más con resultado rápido
   for (let i = 0; i < 25; i++) {
+    // avisos (ofertas recibidas, inferiores): se cierran para seguir
+    while (await page.$('#modal:not([hidden])')) await click('#modal .sheet > [data-a="closeModal"]');
     const ms = await page.$$('[data-a="msgAct"]');
     if (ms.length) await click('[data-a="msgAct"]');
     await click('[data-a="advance"]');
-    if (await page.$('#overlay:not([hidden])')) {
+    if (await page.$('[data-a="mQuick"]')) {
+      while (await page.$('#modal:not([hidden])')) await click('#modal .sheet > [data-a="closeModal"]');
       await click('[data-a="mQuick"]');
       await click('[data-a="mDone"]');
     }
   }
+  while (await page.$('#modal:not([hidden])')) await click('#modal .sheet > [data-a="closeModal"]');
   await shot('11-home-semana');
   await click('[data-a="tab"][data-tab="comp"]');
   await shot('12-tabla');
@@ -87,8 +97,8 @@ const { chromium } = require('playwright');
   const week = await page.evaluate(() => DT.G.week + ' ' + DT.G.year);
   // recargar y continuar
   await page.reload();
-  await page.waitForSelector('[data-a="loadLocal"]');
-  await click('[data-a="loadLocal"]');
+  await page.waitForSelector('[data-a="loadSlot"]');
+  await click('[data-a="loadSlot"]');
   const week2 = await page.evaluate(() => DT.G.week + ' ' + DT.G.year);
   await shot('16-recargado');
   if (process.env.LONG) {

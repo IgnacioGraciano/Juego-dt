@@ -169,6 +169,7 @@ DT.AI = (function () {
     }
     p.t = team.id;
     p.num = null;
+    delete p.cl; // contrato nuevo: la cláusula se genera de nuevo
     p.w = wage;
     p.cy = years;
     p.lst = false;

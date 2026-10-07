@@ -205,7 +205,7 @@ DT.Ev = (function () {
         return {
           title: 'Una joya en las inferiores',
           body: `Los entrenadores de inferiores hablan maravillas de ${n} (${U.posLong[pos].toLowerCase()}, ${age} años). Dicen que puede ser crack.`,
-          opts: [['Subirlo al primer equipo ya', 'Suma minutos de entrenamiento con los grandes.'], ['Dejarlo madurar', 'Sube a fin de temporada, algo más formado.']],
+          opts: [['Subirlo al primer equipo ya', 'Suma minutos de entrenamiento con los grandes.'], ['Dejarlo madurar en las inferiores', 'Lo ascendés cuando quieras desde Plantel → Inferiores.']],
           n, pos, age, ovr, pot,
         };
       },
@@ -216,8 +216,15 @@ DT.Ev = (function () {
           p.w = 15000; t.squad.push(p.id);
           return `${d.n} ya entrena con el primer equipo.`;
         }
-        DT.G.pendingYouth = (DT.G.pendingYouth || []).concat([{ n: d.n, pos: d.pos, age: d.age, ovr: d.ovr + 3, pot: Math.min(93, d.pot + 2), t: t.id }]);
-        return `${d.n} subirá al plantel a fin de temporada.`;
+        const k = DT.P.create({ n: d.n, pos: d.pos, age: d.age, ovr: d.ovr, pot: Math.min(93, d.pot + 2), t: t.id, cy: 1, yt: true });
+        k.acad = 1; k.w = 0; k.cl = 0;
+        t.academy = (t.academy || []).concat([k.id]);
+        // si se pasa del cupo, sale el de menor proyección
+        if (t.academy.length > DT.Acad.SIZE) {
+          const worst = DT.Acad.list(t).filter((p) => p.id !== k.id).sort((a, b) => a.pot - b.pot)[0];
+          if (worst) DT.Acad.release(worst.id);
+        }
+        return `${d.n} se suma a las inferiores. Lo podés ascender cuando quieras.`;
       },
     },
     callUp: {

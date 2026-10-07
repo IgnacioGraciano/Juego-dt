@@ -5,7 +5,7 @@ DT.Main = (function () {
   const A = UI.A;
   const Main = { downloads: null };
   let saveCount = 0;
-  const start = { step: 1, cc: 'ARG', name: '', team: null, diff: 'arcade' };
+  const start = { step: 1, cc: 'ARG', name: '', team: null, diff: 'arcade', slot: 1 };
   const DIFFS = [
     ['arcade', 'Arcade', 'Elegís cualquier club, de los grandes a los chicos.'],
     ['real', 'Realista', 'Arrancás en un club modesto y hacés carrera hasta llegar a los grandes.'],
@@ -38,6 +38,8 @@ DT.Main = (function () {
     const ut = DT.userTeam();
     if (ut.capBase === undefined) DT.E.resetCap(ut);
     if (DT.G.settings.speed === 8) DT.G.settings.speed = 4;
+    if (!DT.G.retired) DT.Acad.ensure(ut);
+    if (!DT.G.wkSnap && !DT.G.retired && !DT.G.pendingOffers) DT.Week.snap();
     UI.tab = 'home';
     UI.compSel = null;
     UI.compCountry = null;
@@ -52,14 +54,31 @@ DT.Main = (function () {
     document.getElementById('tabs').hidden = true;
     document.getElementById('cta').innerHTML = '';
     document.getElementById('top').innerHTML = '';
-    const meta = fresh ? null : DT.Save.localMeta();
-    const cloudMeta = fresh ? null : await DT.Save.cloudMeta();
+    const cloudMeta = await DT.Save.cloudMeta();
     start.step = 1;
-    renderStart(meta, cloudMeta);
+    const metas = DT.Save.allMeta();
+    const free = metas.findIndex((m) => !m);
+    start.slot = free >= 0 ? free + 1 : DT.Save.slot;
+    renderStart(cloudMeta);
+    window.scrollTo(0, 0);
   };
 
-  function renderStart(meta, cloudMeta) {
+  // Las 3 carreras guardadas en el dispositivo.
+  function slotsCard(metas) {
+    const any = metas.some(Boolean);
+    return `<section class="card"><h2>Tus carreras</h2>${metas.map((m, i) => {
+      const n = i + 1;
+      if (!m) return `<div class="slot empty"><span class="slotn">${n}</span><div class="grow muted small">Espacio libre</div></div>`;
+      const tm = { id: m.tid, cc: m.tid ? m.tid.split('_')[0] : '', s: (m.team || '?').slice(0, 3).toUpperCase(), c1: '#8b95a3', c2: '#3a4656' };
+      return `<div class="slot"><span class="slotn">${n}</span>${m.tid ? UI.badge(tm) : ''}<div class="grow"><b>${U.esc(m.team)}</b><div class="tiny muted">${U.esc(m.mgr)} · temporada ${m.year}, semana ${m.week}${m.diff === 'real' ? ' · Realista' : ''}${m.retired ? ' · <span class="pill">Retirado</span>' : m.fired ? ' · <span class="pill bad">Sin club</span>' : ''}</div></div>
+        <button class="btn sm primary" data-a="loadSlot" data-n="${n}">${m.retired ? 'Ver' : 'Jugar'}</button><button class="btn sm" data-a="delSlotAsk" data-n="${n}" aria-label="Borrar la carrera ${n}">Borrar</button></div>`;
+    }).join('')}${any ? '' : '<div class="small muted">Todavía no tenés carreras guardadas. Empezá una nueva acá abajo.</div>'}</section>`;
+  }
+
+  function renderStart(cloudMeta) {
     const main = document.getElementById('main');
+    const metas = DT.Save.allMeta();
+    const meta = metas.find(Boolean);
     if (start.step === 1) {
       main.innerHTML = `
         <div class="hero">
@@ -68,7 +87,7 @@ DT.Main = (function () {
           <div class="muted">Dirigí a tu club en las 10 ligas de Sudamérica, la Libertadores y la Sudamericana.</div>
           ${UI.layoutSwitch()}
         </div>
-        ${meta ? `<section class="card"><span class="up">Partida guardada</span><div><b>${U.esc(meta.team)}</b> · ${U.esc(meta.mgr)} · temporada ${meta.year}, semana ${meta.week}${meta.retired ? ' · <span class="pill">Retirado</span>' : meta.fired ? ' · <span class="pill bad">Sin club</span>' : ''}</div><button class="btn primary block big" data-a="loadLocal">${meta.retired ? 'Ver resumen de la carrera' : 'Continuar partida'}</button></section>` : ''}
+        ${slotsCard(metas)}
         ${cloudMeta && (!meta || cloudMeta.at > meta.at) ? `<section class="card"><span class="up">En tu cuenta</span><div><b>${U.esc(cloudMeta.team)}</b> · temporada ${cloudMeta.year}, semana ${cloudMeta.week}</div><button class="btn block" data-a="loadCloud">Cargar desde la nube</button></section>` : ''}
         <section class="card">
           <h2>Nueva partida</h2>
@@ -76,6 +95,9 @@ DT.Main = (function () {
           <input type="text" id="mgrname" maxlength="30" placeholder="Ej: Marcelo Gallardo" value="${U.esc(start.name)}">
           <span class="up">Dificultad</span>
           <div class="diffpick">${DIFFS.map(([k, l, d]) => `<button class="${start.diff === k ? 'on' : ''}" data-a="stDiff" data-v="${k}" aria-pressed="${start.diff === k}"><b>${l}</b><span>${d}</span></button>`).join('')}</div>
+          <span class="up">Guardar en el espacio</span>
+          <div class="seg">${metas.map((m, i) => `<button class="${start.slot === i + 1 ? 'on' : ''}" data-a="stSlot" data-v="${i + 1}">${i + 1}${m ? ' · ocupado' : ' · libre'}</button>`).join('')}</div>
+          ${metas[start.slot - 1] ? `<div class="tiny" style="color:var(--warn)">Se va a reemplazar la carrera con ${U.esc(metas[start.slot - 1].team)}.</div>` : ''}
           <span class="up">Elegí el país</span>
           <div class="chips" style="flex-wrap:wrap">${DT.COUNTRY_ORDER.map((cc) => `<button class="chip ${start.cc === cc ? 'on' : ''}" data-a="stCountry" data-cc="${cc}">${DT.COUNTRIES[cc].flag} ${DT.COUNTRIES[cc].name}</button>`).join('')}</div>
           <button class="btn primary block" data-a="stNext">Elegir club</button>
@@ -99,13 +121,13 @@ DT.Main = (function () {
   }
   // vuelve a dibujar la pantalla inicial (al cambiar entre modo celular y ordenador)
   Main.refreshStart = async function () {
-    if (start.step === 1) renderStart(DT.Save.localMeta(), DT.Save.cloud.ready ? await DT.Save.cloudMeta() : null);
+    if (start.step === 1) renderStart(DT.Save.cloud.ready ? await DT.Save.cloudMeta() : null);
     else renderStart();
   };
   A.stCountry = (d) => {
     start.name = (document.getElementById('mgrname') || {}).value || start.name;
     start.cc = d.cc;
-    renderStart(DT.Save.localMeta(), null);
+    renderStart(null);
   };
   A.stNext = () => {
     start.name = (document.getElementById('mgrname') || {}).value || '';
@@ -116,20 +138,37 @@ DT.Main = (function () {
   A.stDiff = (d) => {
     start.name = (document.getElementById('mgrname') || {}).value || start.name;
     start.diff = d.v === 'real' ? 'real' : 'arcade';
-    renderStart(DT.Save.localMeta(), null);
+    renderStart(null);
   };
-  A.stBack = () => { start.step = 1; renderStart(DT.Save.localMeta(), null); };
+  A.stBack = () => { start.step = 1; renderStart(null); };
   A.stPick = (d) => {
     const name = (start.name || '').trim() || 'El Profe';
+    DT.Save.setSlot(start.slot || 1);
     DT.W.newGame(start.cc + '_' + d.code, name, start.diff);
+    DT.Week.snap();
     UI.tab = 'home';
     Main.autosave(true);
     UI.render();
     window.scrollTo(0, 0);
   };
-  A.loadLocal = async () => {
+  A.stSlot = (d) => {
+    start.name = (document.getElementById('mgrname') || {}).value || start.name;
+    start.slot = +d.v;
+    renderStart(null);
+  };
+  A.delSlotAsk = (d) => {
+    const m = DT.Save.localMeta(+d.n);
+    UI.modal(`<h3>¿Borrar la carrera ${d.n}?</h3><div class="small">Se borra la carrera de ${U.esc(m ? m.mgr : '')} con ${U.esc(m ? m.team : '')}. No se puede deshacer.</div><button class="btn danger block" data-a="delSlotDo" data-n="${d.n}">Borrar</button>`);
+  };
+  A.delSlotDo = (d) => {
+    DT.Save.clearLocal(+d.n);
+    UI.closeModal();
+    Main.showStart(false);
+  };
+  A.loadSlot = (d) => A.loadLocal(d);
+  A.loadLocal = async (d) => {
     try {
-      const ok = await DT.Save.loadLocal();
+      const ok = await DT.Save.loadLocal(d && d.n ? +d.n : 0);
       if (!ok) { UI.toast('No se encontró la partida.'); return; }
       Main.afterLoad();
     } catch (e) {
@@ -156,7 +195,10 @@ DT.Main = (function () {
       UI.busy = false;
     }
     if (ev.type === 'match') {
+      // el resumen de la semana se muestra después del partido
+      UI.skipWeek = true;
       UI.render();
+      UI.skipWeek = false;
       DT.MatchUI.open(ev.match);
     } else if (ev.type === 'seasonEnd') {
       Main.autosave(true);
@@ -304,7 +346,7 @@ DT.Main = (function () {
     capInit.then(async () => {
       if (!DT.G && DT.Save.cloud.ready) {
         const cm = await DT.Save.cloudMeta();
-        if (cm) renderStart(DT.Save.localMeta(), cm);
+        if (cm) renderStart(cm);
       }
     });
   };
